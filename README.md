@@ -34,7 +34,17 @@ If `python` isn't found, try `python3`.
 
 ---
 
+## Screenshots
+
+![pydventure_tui.py](pydventure_tui.png)
+
+![pydventure_map.py](pydventure_map.png)
+
+---
+
 ## Getting the files
+
+
 
 Put all six scripts in one folder, e.g. `pydventure/`:
 
