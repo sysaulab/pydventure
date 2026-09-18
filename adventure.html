@@ -1,0 +1,2780 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>pydventure</title>
+<style>
+:root {
+  --bg:       #0e1218;
+  --panel:    #0a1018;
+  --panel-2:  #141a22;
+  --edge:     #2a3440;
+  --fg:       #e8ecf0;
+  --dim:      #8892a0;
+  --accent:   #7fb8e8;
+  --good:     #9de8a8;
+  --bad:      #e89090;
+  --title:    #e8c67f;
+  --open:     #5fd07a;
+  --locked:   #d8a040;
+  --item:     #c090e8;
+  --gold:     #d8a040;
+  --gold-2:   #8a6020;
+  --silver:   #8a94a4;
+  --silver-2: #4e5868;
+  --fs:       clamp(0.85rem, 0.78rem + 0.4vw, 1.05rem);
+  --gap:      clamp(0.4rem, 1vmin, 0.8rem);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font: var(--fs)/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--fg); background: var(--bg);
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ layout */
+
+.app {
+  height: 100dvh;
+  display: grid;
+
+  /* Portrait: single column, scene pinned at >= 50dvh, log eats the rest. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows:
+    auto                    /* scene   — real height set on the element */
+    auto                    /* combat  — collapses to 0 when [hidden]     */
+    auto                    /* desc                                       */
+    minmax(0, 1fr)          /* log     — takes leftover height            */
+    auto;                   /* status                                     */
+  grid-template-areas:
+    "scene"
+    "combat"
+    "desc"
+    "log"
+    "status";
+}
+
+@media (orientation: landscape) {
+  .app {
+    /* Two columns. Nav zone is >= 50vw, scene takes what's left. */
+    grid-template-columns: minmax(0, 1fr) minmax(50vw, 1fr);
+    grid-template-rows:
+      auto                  /* combat  */
+      auto                  /* desc    */
+      minmax(0, 1fr)        /* log     */
+      auto;                 /* status  */
+    grid-template-areas:
+      "scene combat"
+      "scene desc"
+      "scene log"
+      "scene status";
+  }
+}
+
+.app > .scene-wrap { grid-area: scene; }
+.app > .combat     { grid-area: combat; }
+.app > .desc       { grid-area: desc; }
+.app > .log        { grid-area: log; }
+.app > .status     { grid-area: status; }
+
+
+/* ------------------------------------------------------------------ combat */
+
+.combat {
+  display: flex; align-items: center; gap: 0.6em;
+  padding: 0.5em 0.8em;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--edge);
+  flex-wrap: wrap;
+}
+.combat[hidden] { display: none; }
+.combat .label {
+  font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--dim);
+}
+.combat .chips { display: flex; gap: 0.35em; flex-wrap: wrap; }
+.combat .spacer { flex: 1; }
+.combat .combat-actions { display: flex; gap: 0.4em; }
+
+.chip {
+  display: inline-flex; align-items: baseline; gap: 0.4em;
+  padding: 0.2em 0.55em;
+  border-radius: 0.3rem;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+}
+.chip.enemy { color: var(--bad);  border-color: #3a1a1a; background: #1a0a0a; }
+.chip.ep    { color: var(--dim);  background: transparent; }
+.chip.item  { color: var(--item); border-color: #3a2a4a; background: #1a1028; }
+.chip small { color: var(--dim); font-size: 0.85em; }
+
+.combat button {
+  font: inherit; font-weight: 600;
+  padding: 0.4em 0.9em;
+  border: 1px solid var(--edge); border-radius: 0.35rem;
+  background: #1a2838; color: var(--fg); cursor: pointer;
+}
+.combat button:hover { background: #26394e; }
+.combat button[data-cmd="fight"]    { color: var(--bad);  border-color: #3a1a1a; }
+.combat button[data-cmd="flee"]     { color: var(--dim); }
+.combat button[data-cmd="use fire"] { color: var(--good); border-color: #1a3a1a; }
+
+/* ------------------------------------------------------------------- scene */
+
+.scene-wrap {
+  position: relative;
+  background: var(--panel);
+  min-height: 50dvh;              /* portrait: at least half the height */
+}
+
+@media (orientation: landscape) {
+  .scene-wrap {
+    min-height: 0;                /* landscape: height is the full column */
+    border-right: 1px solid var(--edge);   /* seam between scene and nav */
+  }
+}
+#scene {
+  display: block;
+  width: 100%; height: 100%;
+}
+
+.btn { cursor: pointer; }
+.btn circle.body {
+  fill: #14202c;
+  stroke: var(--edge);
+  stroke-width: 2;
+  transition: fill 120ms, stroke 120ms;
+}
+.btn:hover circle.body { fill: #1d2c3a; stroke: var(--accent); }
+.btn:active circle.body { fill: #0d1620; }
+.btn text {
+  fill: var(--fg);
+  pointer-events: none;
+  user-select: none;
+}
+.btn[data-kind="door"]    text.glyph { fill: var(--open); }
+.btn[data-kind="locked"]  text.glyph { fill: var(--locked); }
+.btn[data-kind="updown"]  text.glyph { fill: var(--accent); }
+.btn[data-kind="special"] text.glyph { fill: var(--title); }
+.btn[data-present="false"] { display: none; }
+.btn text.sub { fill: var(--dim); }
+
+/* ------------------------------------------------------------------- desc */
+
+.desc {
+  padding: 0.6em 1em;
+  background: var(--panel);
+  border-top: 1px solid var(--edge);
+  display: flex; flex-direction: column; gap: 0.5em;
+  max-height: 22vh; overflow-y: auto;
+}
+.desc-text {
+  margin: 0;
+  font-style: italic;
+  text-wrap: pretty;
+}
+.desc .items { display: flex; flex-wrap: wrap; gap: 0.35em; }
+.chip.item button {
+  font: inherit; font-weight: 600;
+  border: 0; background: #2a1e40; color: var(--item);
+  padding: 0 0.6em; margin: -0.2em -0.55em -0.2em 0.2em;
+  border-radius: 0 0.3rem 0.3rem 0;
+  cursor: pointer;
+}
+.chip.item button:hover { background: #3a2a58; }
+
+/* -------------------------------------------------------------------- log */
+
+.log {
+  background: var(--panel);
+  border-top: 1px solid var(--edge);
+  padding: 0.5em 1em;
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+  overflow-y: auto;
+}
+.log p { margin: 0 0 0.15em; white-space: pre-wrap; text-wrap: pretty; }
+.log p.good  { color: var(--good); }
+.log p.bad   { color: var(--bad); }
+.log p.dim   { color: var(--dim); }
+.log p.title { color: var(--title); font-weight: 600; }
+.log p.prompt{ color: var(--accent); }
+
+/* ------------------------------------------------------------------ status */
+
+.status {
+  display: flex; flex-wrap: wrap; gap: 0.5em;
+  align-items: baseline;
+  padding: 0.5em 0.9em;
+  background: #0a1620;
+  border-top: 1px solid var(--edge);
+  font-weight: 600;
+}
+.status .sep  { color: var(--edge); }
+.status .hp   { color: var(--good); }
+.status .hp.low { color: var(--bad); }
+.status .goal { color: var(--title); }
+.status .inv  {
+  font-family: ui-monospace, monospace; font-weight: 400;
+  color: var(--dim);
+}
+
+/* ---------------------------------------------------------------- overlays */
+
+.overlay {
+  position: fixed; inset: 0; z-index: 10;
+  background: var(--bg);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.overlay[hidden] { display: none; }
+.overlay header {
+  padding: 0.7em 1em;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--edge);
+  display: flex; align-items: center; gap: 0.6em;
+  font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--dim); font-size: 0.85em;
+}
+.overlay header .spacer { flex: 1; }
+.overlay header button {
+  font: inherit; font-weight: 600; text-transform: none; letter-spacing: 0;
+  padding: 0.35em 0.8em;
+  border: 1px solid var(--edge); border-radius: 0.3rem;
+  background: #1a2838; color: var(--fg); cursor: pointer;
+}
+.overlay header button:hover { background: #26394e; }
+
+/* ---------------------------------------------------------------- map view */
+
+.map-body { padding: var(--gap); min-height: 0; overflow: auto; }
+#map-svg {
+  display: block;
+  width: 100%; height: auto;
+  max-height: 100%;
+  background: var(--panel);
+  border-radius: 0.4rem;
+}
+
+/* ------------------------------------------------------------ combine view */
+
+.combine-body {
+  padding: var(--gap);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: var(--gap);
+  min-height: 0;
+}
+.targets {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0.6em;
+  align-items: stretch;
+}
+.targets .plus {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--dim); font-size: 1.6em; font-weight: 700;
+}
+.slot {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 6em;
+  padding: 0.8em;
+  border: 2px dashed var(--edge);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  color: var(--dim);
+  font-family: ui-monospace, monospace;
+  text-align: center;
+  transition: border-color 120ms, background 120ms;
+  cursor: pointer;
+}
+.slot[data-filled] {
+  border-style: solid;
+  border-color: var(--item);
+  color: var(--item);
+  background: #1a1028;
+}
+.slot.over { border-color: var(--accent); background: #14202c; }
+.slot .slot-hint { font-size: 0.85em; color: var(--dim); }
+.slot .slot-item { font-size: 1.1em; font-weight: 700; }
+
+.combine-actions {
+  display: flex; justify-content: center;
+}
+.combine-actions button {
+  font: inherit; font-weight: 600;
+  padding: 0.6em 1.6em;
+  background: #1a2838; color: var(--fg);
+  border: 1px solid var(--edge); border-radius: 0.35rem;
+  cursor: pointer;
+}
+.combine-actions button:disabled { opacity: 0.35; cursor: default; }
+.combine-actions button:not(:disabled):hover { background: #26394e; }
+
+.inv-list {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-wrap: wrap; gap: 0.4em;
+  align-content: flex-start;
+  min-height: 0; overflow-y: auto;
+}
+.inv-list .inv-item {
+  display: inline-flex; align-items: baseline; gap: 0.5em;
+  padding: 0.4em 0.8em;
+  border: 1px solid #3a2a4a;
+  border-radius: 0.35rem;
+  background: #1a1028;
+  color: var(--item);
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+  user-select: none;
+}
+.inv-list .inv-item:hover { background: #2a1a44; }
+.inv-list .inv-item .count { color: var(--dim); font-size: 0.85em; }
+.inv-list .empty { color: var(--dim); font-style: italic; }
+
+/* ---------------------------------------------------------------- welcome */
+
+.overlay.welcome {
+  display: grid;
+  place-items: center;
+  grid-template-rows: none;
+  padding: var(--gap);
+  overflow-y: auto;
+}
+.welcome .card {
+  width: min(32rem, 100%);
+  max-height: calc(100dvh - 2 * var(--gap));
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 0.6rem;
+  padding: 1.6em;
+  display: flex; flex-direction: column; gap: 1.1em;
+}
+.welcome h1 {
+  margin: 0;
+  font-size: 1.6em;
+  letter-spacing: 0.02em;
+  color: var(--gold);
+}
+.welcome .sub {
+  margin: 0;
+  color: var(--dim);
+  font-size: 0.9em;
+  min-height: 1.4em;
+}
+.welcome .form {
+  display: flex; flex-direction: column; gap: 0.8em;
+}
+.welcome label {
+  display: flex; flex-direction: column; gap: 0.25em;
+}
+.welcome label span {
+  font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--dim); font-weight: 600;
+}
+.welcome input {
+  font: inherit; font-family: ui-monospace, monospace;
+  padding: 0.5em 0.7em;
+  background: var(--panel-2); color: var(--fg);
+  border: 1px solid var(--edge); border-radius: 0.35rem;
+  font-size: 1rem;
+}
+.welcome input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.welcome .field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.6fr;
+  gap: 0.6em;
+}
+.welcome .actions {
+  display: flex; gap: 0.6em; justify-content: flex-end;
+  margin-top: 0.3em;
+}
+.welcome .actions button {
+  font: inherit; font-weight: 600;
+  padding: 0.7em 1.2em;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+}
+.welcome #w-regenerate {
+  background: #1a2838; color: var(--fg);
+  border: 1px solid var(--edge);
+}
+.welcome #w-regenerate:hover { background: #26394e; }
+.welcome #w-play {
+  background: var(--gold); color: #1a1208;
+  border: 0;
+}
+.welcome #w-play:hover { background: #e8c67f; }
+
+/* ----------------------------------------------------------- ended modal */
+
+.ended {
+  position: fixed; inset: 0; z-index: 20;
+  display: grid; place-items: center;
+  background: rgba(0,0,0,0.7);
+}
+.ended[hidden] { display: none; }
+.ended .box {
+  max-width: 32rem; padding: 1.5em;
+  background: var(--panel);
+  border: 1px solid var(--edge); border-radius: 0.5rem;
+  text-align: center;
+}
+.ended h2 { margin: 0 0 0.5em; color: var(--title); }
+.ended p  { margin: 0 0 1em; color: var(--dim); }
+.ended button {
+  font: inherit; font-weight: 600;
+  padding: 0.6em 1.6em;
+  background: #1a2838; color: var(--fg);
+  border: 1px solid var(--edge); border-radius: 0.35rem;
+  cursor: pointer;
+}
+.ended button:hover { background: #26394e; }
+
+/* ------------------------------------------------------------------ dev */
+
+.dev {
+  position: fixed; bottom: 0.4em; right: 0.4em; z-index: 30;
+  font-size: 0.75rem; color: var(--dim);
+  background: var(--panel-2); border: 1px solid var(--edge);
+  border-radius: 0.3rem; padding: 0.2em 0.4em;
+}
+.dev button {
+  font: inherit; background: transparent; color: var(--accent);
+  border: 0; cursor: pointer; margin-left: 0.3em;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header class="combat" id="combat" hidden>
+    <span class="label">Enemies</span>
+    <div class="chips" id="combat-chips"></div>
+    <div class="spacer"></div>
+    <div class="combat-actions" id="combat-actions"></div>
+  </header>
+
+  <main class="scene-wrap">
+    <svg id="scene" viewBox="0 0 900 700" preserveAspectRatio="xMidYMid meet" aria-label="Room scene">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0"    stop-color="#4a6a8a"/>
+          <stop offset="0.55" stop-color="#8a9a94"/>
+          <stop offset="1"    stop-color="#3a4a3a"/>
+        </linearGradient>
+        <radialGradient id="vignette" cx="0.5" cy="0.5" r="0.75">
+          <stop offset="0.55" stop-color="#000" stop-opacity="0"/>
+          <stop offset="1"    stop-color="#000" stop-opacity="0.55"/>
+        </radialGradient>
+      </defs>
+
+      <g id="terrain">
+        <rect id="terrain-bg" width="900" height="700" fill="url(#sky)"/>
+        <path d="M0,500 L120,380 L240,470 L380,340 L520,440 L680,320 L820,420 L900,380 L900,700 L0,700 Z"
+              fill="#2a3a4a" opacity="0.7"/>
+        <path d="M0,580 L180,500 L340,560 L480,470 L640,560 L780,490 L900,560 L900,700 L0,700 Z"
+              fill="#1d2b38" opacity="0.8"/>
+        <path d="M0,650 L900,650 L900,700 L0,700 Z" fill="#0e1a22"/>
+        <rect width="900" height="700" fill="url(#vignette)"/>
+      </g>
+
+      <g id="rose" transform="translate(450,350)">
+        <g fill-rule="evenodd">
+          <g transform="rotate(45)">
+            <polygon points="0,-95 10,-12 0,0"  fill="var(--silver)"/>
+            <polygon points="0,-95 -10,-12 0,0" fill="var(--silver-2)"/>
+          </g>
+          <g transform="rotate(135)">
+            <polygon points="0,-95 10,-12 0,0"  fill="var(--silver)"/>
+            <polygon points="0,-95 -10,-12 0,0" fill="var(--silver-2)"/>
+          </g>
+          <g transform="rotate(225)">
+            <polygon points="0,-95 10,-12 0,0"  fill="var(--silver)"/>
+            <polygon points="0,-95 -10,-12 0,0" fill="var(--silver-2)"/>
+          </g>
+          <g transform="rotate(315)">
+            <polygon points="0,-95 10,-12 0,0"  fill="var(--silver)"/>
+            <polygon points="0,-95 -10,-12 0,0" fill="var(--silver-2)"/>
+          </g>
+        </g>
+        <g fill-rule="evenodd">
+          <g transform="rotate(0)">
+            <polygon points="0,-135 15,-16 0,0"  fill="var(--gold)"/>
+            <polygon points="0,-135 -15,-16 0,0" fill="var(--gold-2)"/>
+          </g>
+          <g transform="rotate(90)">
+            <polygon points="0,-135 15,-16 0,0"  fill="var(--gold)"/>
+            <polygon points="0,-135 -15,-16 0,0" fill="var(--gold-2)"/>
+          </g>
+          <g transform="rotate(180)">
+            <polygon points="0,-135 15,-16 0,0"  fill="var(--gold)"/>
+            <polygon points="0,-135 -15,-16 0,0" fill="var(--gold-2)"/>
+          </g>
+          <g transform="rotate(270)">
+            <polygon points="0,-135 15,-16 0,0"  fill="var(--gold)"/>
+            <polygon points="0,-135 -15,-16 0,0" fill="var(--gold-2)"/>
+          </g>
+        </g>
+        <circle r="30" fill="var(--panel)" stroke="var(--gold)" stroke-width="2"/>
+        <circle r="12" fill="var(--gold)"/>
+        <circle r="4"  fill="var(--panel)"/>
+      </g>
+
+      <g id="buttons">
+        <g class="btn" data-kind="door" data-dir="N" data-cmd="move n"
+           transform="translate(450,100)" role="button" tabindex="0" aria-label="Move north">
+          <circle class="body" r="46"/>
+          <text class="glyph" y="10" text-anchor="middle" font-size="30" font-weight="700">N</text>
+          <text class="sub" y="30" text-anchor="middle" font-size="14"></text>
+        </g>
+        <g class="btn" data-kind="door" data-dir="S" data-cmd="move s"
+           transform="translate(450,600)" role="button" tabindex="0" aria-label="Move south">
+          <circle class="body" r="46"/>
+          <text class="glyph" y="10" text-anchor="middle" font-size="30" font-weight="700">S</text>
+          <text class="sub" y="30" text-anchor="middle" font-size="14"></text>
+        </g>
+        <g class="btn" data-kind="door" data-dir="E" data-cmd="move e"
+           transform="translate(760,350)" role="button" tabindex="0" aria-label="Move east">
+          <circle class="body" r="46"/>
+          <text class="glyph" y="10" text-anchor="middle" font-size="30" font-weight="700">E</text>
+          <text class="sub" y="30" text-anchor="middle" font-size="14"></text>
+        </g>
+        <g class="btn" data-kind="door" data-dir="W" data-cmd="move w"
+           transform="translate(140,350)" role="button" tabindex="0" aria-label="Move west">
+          <circle class="body" r="46"/>
+          <text class="glyph" y="10" text-anchor="middle" font-size="30" font-weight="700">W</text>
+          <text class="sub" y="30" text-anchor="middle" font-size="14"></text>
+        </g>
+
+        <g class="btn" data-kind="updown" data-dir="U" data-cmd="move u"
+           transform="translate(210,120)" role="button" tabindex="0" aria-label="Go up">
+          <circle class="body" r="40"/>
+          <text class="glyph" y="12" text-anchor="middle" font-size="34" font-weight="700">↑</text>
+          <text class="sub" y="28" text-anchor="middle" font-size="14"></text>
+        </g>
+        <g class="btn" data-kind="updown" data-dir="D" data-cmd="move d"
+           transform="translate(690,580)" role="button" tabindex="0" aria-label="Go down">
+          <circle class="body" r="40"/>
+          <text class="glyph" y="12" text-anchor="middle" font-size="34" font-weight="700">↓</text>
+          <text class="sub" y="28" text-anchor="middle" font-size="14"></text>
+        </g>
+
+        <g class="btn" data-kind="special" data-open="ov-combine"
+           transform="translate(210,580)" role="button" tabindex="0" aria-label="Combine">
+          <circle class="body" r="40"/>
+          <text class="glyph" y="18" text-anchor="middle" font-size="52" font-weight="700">⚗</text>
+        </g>
+
+        <g class="btn" data-kind="special" data-open="ov-map"
+           transform="translate(690,120)" role="button" tabindex="0" aria-label="Map">
+          <circle class="body" r="40"/>
+          <text class="glyph" y="17" text-anchor="middle" font-size="48" font-weight="700">⊞</text>
+        </g>
+      </g>
+    </svg>
+  </main>
+
+  <section class="desc">
+    <p class="desc-text" id="desc-text"></p>
+    <div class="items" id="desc-items"></div>
+  </section>
+
+  <section class="log" id="log"></section>
+
+  <footer class="status" id="status"></footer>
+
+</div>
+
+<!-- ============================================================= welcome -->
+<div class="overlay welcome" id="ov-welcome">
+  <div class="card">
+    <h1>pydventure</h1>
+    <p class="sub" id="w-status"></p>
+
+    <div class="form">
+      <label>
+        <span>Name</span>
+        <input type="text" id="w-name" maxlength="32" autocomplete="off">
+      </label>
+      <div class="field-row">
+        <label>
+          <span>Width</span>
+          <input type="number" id="w-width" min="4" max="32">
+        </label>
+        <label>
+          <span>Height</span>
+          <input type="number" id="w-height" min="4" max="32">
+        </label>
+        <label>
+          <span>Seed</span>
+          <input type="text" id="w-seed" autocomplete="off">
+        </label>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="w-regenerate" type="button">Regenerate</button>
+      <button id="w-play" type="button">Play</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ map -->
+<div class="overlay" id="ov-map" hidden>
+  <header>
+    <span>Map</span>
+    <span class="spacer"></span>
+    <button data-close type="button">Close</button>
+  </header>
+  <div class="map-body">
+    <svg id="map-svg" viewBox="0 0 400 400"></svg>
+  </div>
+  <footer class="status" id="map-status"></footer>
+</div>
+
+<!-- ============================================================ combine -->
+<div class="overlay" id="ov-combine" hidden>
+  <header>
+    <span>Combine</span>
+    <span class="spacer"></span>
+    <button data-close type="button">Close</button>
+  </header>
+  <div class="combine-body">
+
+    <div class="targets">
+      <div class="slot" id="slot-a" data-slot="a">
+        <span class="slot-item" hidden></span>
+        <span class="slot-hint">Click or drop item</span>
+      </div>
+      <div class="plus">+</div>
+      <div class="slot" id="slot-b" data-slot="b">
+        <span class="slot-item" hidden></span>
+        <span class="slot-hint">Click or drop item</span>
+      </div>
+    </div>
+
+    <div class="combine-actions">
+      <button id="combine-go" type="button" disabled>Combine</button>
+    </div>
+
+    <ul class="inv-list" id="combine-inv"></ul>
+
+  </div>
+</div>
+
+<!-- ============================================================== ended -->
+<div class="ended" id="ended" hidden>
+  <div class="box">
+    <h2 id="ended-title">Victory</h2>
+    <p  id="ended-body">The seven crystals are placed. The world is quiet.</p>
+    <button type="button" id="ended-close">Close</button>
+  </div>
+</div>
+
+<details class="dev">
+  <summary>dev</summary>
+  <button data-open="ov-welcome" type="button">welcome</button>
+  <button data-open="ov-map" type="button">map</button>
+  <button data-open="ov-combine" type="button">combine</button>
+  <button id="dev-ended" type="button">ended</button>
+  <button id="dev-wipe" type="button">wipe save</button>
+</details>
+
+<script>
+"use strict";
+
+// ============================================================================
+// CONFIG — game tables, ported from pydventure_gamemaker.py
+// ============================================================================
+
+const SKILL_NAMES = new Set(["fight", "avoidance", "search"]);
+
+const ENEMIES = {
+  octorok_blue: { difficulty: 1  },
+  bat_blue:     { difficulty: 2  },
+  spider_blue:  { difficulty: 3  },
+  fan:          { difficulty: 5  },
+  rhinos:       { difficulty: 6  },
+  knight_blue:  { difficulty: 7  },
+  octorok_red:  { difficulty: 11 },
+  bat_red:      { difficulty: 12 },
+  spider_red:   { difficulty: 13 },
+  fan_red:      { difficulty: 15 },
+  rhinos_red:   { difficulty: 16 },
+  knight_red:   { difficulty: 17 },
+  ghosts:       { difficulty: 19 },
+  stalfos:      { difficulty: 20 },
+  darknut:      { difficulty: 24 },
+  wizzrobe:     { difficulty: 27 },
+  dragon:       { difficulty: 50 },
+  dragon_red:   { difficulty: 200 },
+};
+
+const DROPS = {
+  octorok_blue: { items: { wood: [0, 2] } },
+  bat_blue:     { items: { wood: [0, 1] } },
+  spider_blue:  { items: { wood: [1, 2] } },
+  fan:          { items: { wood: [1, 2] } },
+  rhinos:       { items: { wood: [1, 3], rock: [0, 1] } },
+  knight_blue:  { items: { wood: [1, 2], rock: [0, 1] } },
+  octorok_red:  { items: { wood: [1, 2], rock: [0, 1] } },
+  bat_red:      { items: { wood: [1, 2] } },
+  spider_red:   { items: { wood: [1, 3], rock: [0, 1] } },
+  fan_red:      { items: { wood: [2, 3], rock: [0, 1], bomb: [0, 1] } },
+  rhinos_red:   { items: { wood: [2, 3], rock: [1, 2], bomb: [0, 1] } },
+  knight_red:   { items: { wood: [1, 3], rock: [1, 2], bomb: [0, 1] } },
+  ghosts:       { items: { wood: [1, 2], rock: [1, 2], bomb: [0, 1] } },
+  stalfos:      { items: { wood: [1, 3], rock: [0, 2], bomb: [0, 1] } },
+  darknut:      { items: { wood: [2, 3], rock: [1, 2], bomb: [0, 2] } },
+  wizzrobe:     { items: { wood: [2, 4], rock: [1, 3], bomb: [1, 2] } },
+  dragon:       { items: { wood: [3, 5], rock: [2, 3], bomb: [2, 3], heart: [1, 1] } },
+  dragon_red:   { items: { wood: [4, 6], rock: [3, 5], bomb: [3, 5], heart: [1, 1] } },
+};
+
+const RECIPES = [
+  { inputs: { wood: 2 },                    output: { item: "fire" } },
+  { inputs: { rock: 2 },                    output: { item: "blunt_knife" } },
+  { inputs: { blunt_knife: 1, wood: 1 },    output: { item: "plank" } },
+  { inputs: { plank: 2 },                   output: { item: "shelter" } },
+  { inputs: { fire: 1, wood: 1 },           output: { item: "coal" } },
+  { inputs: { coal: 1, ore: 1 },            output: { item: "steel" } },
+  { inputs: { blunt_knife: 1, steel: 1 },   output: { item: "sword" } },
+];
+
+const TERRAINS = {
+  plains:      { kind: "overworld", floors: [1], weight: 4, description: "an arid plain, cracked and dry",           enemies: ["octorok_blue", "octorok_red"] },
+  forest:      { kind: "overworld", floors: [1], weight: 3, description: "a dense forest, the canopy closing overhead", enemies: ["spider_blue", "bat_blue", "spider_red"] },
+  dead_plain:  { kind: "overworld", floors: [1], weight: 2, description: "a dead plain, the soil grey and lifeless",  enemies: ["knight_blue", "knight_red"] },
+  cemetery:    { kind: "overworld", floors: [1], weight: 1, description: "a dried lake bed littered with tombs",       enemies: ["ghosts"] },
+  valley:      { kind: "overworld", floors: [1], weight: 1, description: "a rocky valley, boulders strewn across the ground", enemies: ["rhinos", "rhinos_red"] },
+  cave:        { kind: "overworld", floors: [0], weight: 1, description: "a narrow cave, cold and quiet",              enemies: ["bat_blue", "bat_red", "octorok_blue"] },
+  stone_hall:  { kind: "dungeon",   floors: [0], weight: 5, description: "a narrow stone hall",                       enemies: ["stalfos", "bat_red"] },
+  crypt:       { kind: "dungeon",   floors: [0], weight: 4, description: "a damp crypt, water pooling in the corners", enemies: ["stalfos", "spider_red"] },
+  armory:      { kind: "dungeon",   floors: [0], weight: 3, description: "a ruined armory, racks long since collapsed", enemies: ["darknut", "knight_red"] },
+  library:     { kind: "dungeon",   floors: [0], weight: 2, description: "a library of rotting books",                 enemies: ["wizzrobe", "bat_red"] },
+  sanctum:     { kind: "dungeon",   floors: [0], weight: 1, description: "a torch-lit sanctum",                        enemies: ["wizzrobe", "darknut"] },
+  shrine_hall: { kind: "shrine",    floors: [0], weight: 1, description: "a vast hall of black stone",                 enemies: ["wizzrobe", "darknut"] },
+};
+
+const TERRAIN_RESOURCES = {
+  plains:      [["rock", 1], ["wood", 1]],
+  forest:      [["wood", 4], ["rock", 1]],
+  dead_plain:  [["rock", 3], ["wood", 1]],
+  cemetery:    [["rock", 2]],
+  valley:      [["rock", 3], ["wood", 1]],
+  cave:        [["rock", 2], ["wood", 1]],
+  stone_hall:  [["ore", 3], ["coal", 2]],
+  crypt:       [["ore", 2], ["coal", 3]],
+  armory:      [["ore", 4], ["coal", 2]],
+  library:     [["coal", 4], ["ore", 1]],
+  sanctum:     [["ore", 3], ["coal", 3]],
+  shrine_hall: [["ore", 2], ["coal", 2]],
+};
+
+const DESCRIPTION_SETS = {
+  overworld: { patterns: [
+    "You are in {terrain}. The way continues {exits}.",
+    "{Terrain}, extending {exits}.",
+    "You stand in {terrain}. {feature}The paths lead {exits}.",
+    "{Terrain}. {feature}Passages run {exits}.",
+    "This is {terrain}. {feature}Exits: {exits}.",
+    "{Terrain} stretches away. {feature}The ways lead {exits}.",
+  ]},
+  dungeon: { patterns: [
+    "A cramped passage of cold stone. {feature}{Exits} lead onward.",
+    "{Terrain}, lit by a single guttering torch. {feature}{Exits}.",
+    "The walls press close. {feature}You can go {exits}.",
+    "Dust and old bones. {feature}Ways {exits}.",
+    "Silence, save for your own breathing. {feature}Exits: {exits}.",
+    "{Terrain}. Water drips somewhere out of sight. {feature}{Exits}.",
+  ]},
+  shrine: { patterns: [
+    "The air is very still. {feature}You can go {exits}.",
+    "{Terrain}. Something vast breathes nearby. {feature}{Exits}.",
+    "Old stone, older silence. {feature}The way is {exits}.",
+    "{Terrain}. The shadows feel deeper here. {feature}{Exits}.",
+  ]},
+};
+
+const FEATURE_PHRASES = {
+  stairs_up:       "A stone staircase ascends here. ",
+  stairs_down:     "A dark stairwell descends into the earth. ",
+  shop:            "An old man sits beside a small fire, wares on a cloth. ",
+  item:            "Something glints in the dust. ",
+  crystal:         "A crystal pulses with pale light. ",
+  crystal_chamber: "The air hums. A pedestal waits at the far end. ",
+  shrine:          "A stone altar hums in the center of the chamber. ",
+};
+
+const DIRS = ["N", "E", "S", "W"];
+const DELTA = { N: [0, 1], S: [0, -1], E: [1, 0], W: [-1, 0], U: [0, 0, 1], D: [0, 0, -1] };
+const OPPOSITE = { N: "S", S: "N", E: "W", W: "E", U: "D", D: "U" };
+const DIR_NAMES = { N: "north", E: "east", S: "south", W: "west", U: "up", D: "down" };
+
+// ============================================================================
+// RNG — mulberry32 + FNV-1a string hash
+// ============================================================================
+
+function hashString(s) {
+  let h = 2166136261 >>> 0;
+  const str = String(s);
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function seedFromAny(s) {
+  if (typeof s === "number" && Number.isFinite(s)) return s >>> 0;
+  const trimmed = String(s).trim();
+  const n = Number(trimmed);
+  if (!Number.isNaN(n) && String(n) === trimmed) return n >>> 0;
+  return hashString(trimmed);
+}
+
+class RNG {
+  constructor(seed) { this.a = seedFromAny(seed) >>> 0; }
+  next() {
+    this.a = (this.a + 0x6D2B79F5) | 0;
+    let t = Math.imul(this.a ^ (this.a >>> 15), 1 | this.a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  int(lo, hi) { return Math.floor(this.next() * (hi - lo + 1)) + lo; }
+  range(n)    { return this.int(0, n - 1); }
+  choice(a)   { return a[this.range(a.length)]; }
+  shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = this.range(i + 1);
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  weighted(pairs) {
+    let total = 0;
+    for (const [, w] of pairs) total += w;
+    let r = this.next() * total;
+    let acc = 0;
+    for (const [k, w] of pairs) {
+      acc += w;
+      if (r < acc) return k;
+    }
+    return pairs[pairs.length - 1][0];
+  }
+}
+
+// ============================================================================
+// WORLD GENERATION — ported from pydventure_mazemaker.py
+// ============================================================================
+
+class Maze {
+  constructor(w, h) {
+    this.w = w; this.h = h;
+    this.walls = {};
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++)
+        this.walls[`${x},${y}`] = { N: true, E: true, S: true, W: true };
+  }
+  inBounds(x, y) { return x >= 0 && x < this.w && y >= 0 && y < this.h; }
+  *neighbors(x, y) {
+    for (const d of DIRS) {
+      const [dx, dy] = DELTA[d];
+      const nx = x + dx, ny = y + dy;
+      if (this.inBounds(nx, ny)) yield [d, nx, ny];
+    }
+  }
+  openWall(x, y, d) {
+    const [dx, dy] = DELTA[d];
+    const nx = x + dx, ny = y + dy;
+    if (!this.inBounds(nx, ny)) return;
+    this.walls[`${x},${y}`][d] = false;
+    this.walls[`${nx},${ny}`][OPPOSITE[d]] = false;
+  }
+  exits(x, y) {
+    const w = this.walls[`${x},${y}`];
+    return DIRS.filter(d => !w[d]);
+  }
+  isDeadEnd(x, y) { return this.exits(x, y).length === 1; }
+  carve(rng) {
+    const sx = rng.range(this.w), sy = rng.range(this.h);
+    const visited = new Set([`${sx},${sy}`]);
+    const stack = [[sx, sy]];
+    while (stack.length) {
+      const [x, y] = stack[stack.length - 1];
+      const unvisited = [];
+      for (const [d, nx, ny] of this.neighbors(x, y))
+        if (!visited.has(`${nx},${ny}`)) unvisited.push([d, nx, ny]);
+      if (!unvisited.length) { stack.pop(); continue; }
+      const [d, nx, ny] = rng.choice(unvisited);
+      this.openWall(x, y, d);
+      visited.add(`${nx},${ny}`);
+      stack.push([nx, ny]);
+    }
+  }
+  braid(rng, amount) {
+    const dead = [];
+    for (let y = 0; y < this.h; y++)
+      for (let x = 0; x < this.w; x++)
+        if (this.isDeadEnd(x, y)) dead.push([x, y]);
+    rng.shuffle(dead);
+    const n = Math.floor(dead.length * amount);
+    for (const [x, y] of dead.slice(0, n)) {
+      const cands = [];
+      for (const [d, nx, ny] of this.neighbors(x, y))
+        if (this.walls[`${x},${y}`][d]) cands.push([d, nx, ny]);
+      if (!cands.length) continue;
+      const [d] = rng.choice(cands);
+      this.openWall(x, y, d);
+    }
+  }
+}
+
+function bfsDistances(maze, start) {
+  const key = (x, y) => `${x},${y}`;
+  const dist = new Map([[key(start[0], start[1]), 0]]);
+  const q = [start];
+  while (q.length) {
+    const [x, y] = q.shift();
+    for (const [d, nx, ny] of maze.neighbors(x, y)) {
+      if (maze.walls[key(x, y)][d]) continue;
+      if (dist.has(key(nx, ny))) continue;
+      dist.set(key(nx, ny), dist.get(key(x, y)) + 1);
+      q.push([nx, ny]);
+    }
+  }
+  return dist;
+}
+
+function formatExits(exits) {
+  const words = exits.filter(e => DIR_NAMES[e]).map(e => DIR_NAMES[e]);
+  if (!words.length) return "nowhere";
+  if (words.length === 1) return words[0];
+  if (words.length === 2) return `${words[0]} and ${words[1]}`;
+  return words.slice(0, -1).join(", ") + ", and " + words[words.length - 1];
+}
+
+class Level {
+  constructor(cfg, worldCfg, rng) {
+    this.cfg = cfg;
+    this.world = worldCfg;
+    this.rng = rng;
+    this.name = cfg.name;
+    this.kind = cfg.kind;
+    this.width = cfg.width;
+    this.height = cfg.height;
+    this.depth = cfg.depth;
+    this.descrRng = new RNG(`${worldCfg.seed}:${cfg.name}:descr`);
+    this.floors = {};
+    this.terrains = {};
+    this.enemies = {};
+    this.items = {};
+    this.features = {};
+    this.doorReqs = {};
+    this.teleports = {};
+    this.descriptions = {};
+  }
+  key(x, y, z) { return `${x},${y},${z}`; }
+
+  generate() {
+    this.carve();
+    this.assignTerrain();
+    if (this.kind === "overworld") {
+      this.placeStairs();
+      this.placeShops();
+      this.placeLooseItems();
+      this.clearStart();
+    } else if (this.kind === "dungeon") {
+      this.placeCrystal();
+    } else if (this.kind === "shrine") {
+      this.placeShrine();
+    }
+    this.placeResources();
+    this.placeOre();
+    this.placeEnemies();
+    this.placeBombWalls();
+  }
+
+  carve() {
+    for (let z = 0; z < this.depth; z++) {
+      const m = new Maze(this.width, this.height);
+      m.carve(this.rng);
+      m.braid(this.rng, this.cfg.braid ?? 0.25);
+      this.floors[z] = m;
+    }
+  }
+
+  assignTerrain() {
+    for (let z = 0; z < this.depth; z++) {
+      const pool = [];
+      for (const [tname, tdata] of Object.entries(TERRAINS).sort()) {
+        if (tdata.kind !== this.kind) continue;
+        if (!(tdata.floors || []).includes(z)) continue;
+        pool.push([tname, tdata.weight]);
+      }
+      if (!pool.length) continue;
+      for (let y = 0; y < this.height; y++)
+        for (let x = 0; x < this.width; x++)
+          this.terrains[this.key(x, y, z)] = this.rng.weighted(pool);
+    }
+  }
+
+  emptyCells(z) {
+    const cells = [];
+    for (let y = 0; y < this.height; y++)
+      for (let x = 0; x < this.width; x++) {
+        const k = this.key(x, y, z);
+        if (!this.features[k] && !this.items[k] && !this.enemies[k]) cells.push([x, y]);
+      }
+    this.rng.shuffle(cells);
+    return cells;
+  }
+
+  placeStairs() {
+    const count = this.cfg.features?.stair_pairs ?? 0;
+    if (this.depth < 2 || count === 0) return;
+    const cands = [];
+    for (let y = 0; y < this.height; y++)
+      for (let x = 0; x < this.width; x++) cands.push([x, y]);
+    this.rng.shuffle(cands);
+    const pairs = [];
+    for (let z = 0; z < this.depth - 1; z++) pairs.push([z, z + 1]);
+    let placed = 0;
+    for (const [x, y] of cands) {
+      if (placed >= count) break;
+      const [zLo, zHi] = this.rng.choice(pairs);
+      if (this.features[this.key(x, y, zLo)] || this.features[this.key(x, y, zHi)]) continue;
+      (this.features[this.key(x, y, zLo)] ||= []).push("stairs_up");
+      (this.features[this.key(x, y, zHi)] ||= []).push("stairs_down");
+      placed++;
+    }
+  }
+
+  placeShops() {
+    for (const shop of this.cfg.features?.shops ?? []) {
+      const z = shop.floor ?? 0;
+      if (z >= this.depth) continue;
+      const cells = this.emptyCells(z);
+      if (!cells.length) continue;
+      const [x, y] = cells[0];
+      (this.features[this.key(x, y, z)] ||= []).push("shop");
+      (this.items[this.key(x, y, z)] ||= []).push(...(shop.items || []));
+    }
+  }
+
+  placeLooseItems() {
+    for (const spec of this.cfg.features?.loose_items ?? []) {
+      const z = spec.floor ?? 0;
+      if (z >= this.depth) continue;
+      const count = spec.count ?? 1;
+      const cells = this.emptyCells(z);
+      if (!cells.length) continue;
+      const [x, y] = cells[0];
+      let payload = spec.name;
+      if (count > 1) payload += `+${count - 1}`;
+      (this.features[this.key(x, y, z)] ||= []).push("item");
+      (this.items[this.key(x, y, z)] ||= []).push(payload);
+    }
+  }
+
+  placeResources() {
+    const chance = this.cfg.resource_chance ?? 0;
+    if (chance <= 0) return;
+    for (let z = 0; z < this.depth; z++)
+      for (let y = 0; y < this.height; y++)
+        for (let x = 0; x < this.width; x++) {
+          const k = this.key(x, y, z);
+          if (this.items[k] || this.features[k]) continue;
+          if (this.rng.next() >= chance) continue;
+          const pool = TERRAIN_RESOURCES[this.terrains[k]];
+          if (!pool) continue;
+          this.items[k] = [this.rng.weighted(pool)];
+        }
+  }
+
+  placeOre() {
+    const count = this.cfg.ore_count ?? 0;
+    if (count <= 0) return;
+    for (let z = 0; z < this.depth; z++) {
+      let placed = 0, attempts = 0;
+      while (placed < count && attempts < 500) {
+        attempts++;
+        const x = this.rng.range(this.width);
+        const y = this.rng.range(this.height);
+        const k = this.key(x, y, z);
+        if (this.items[k] || this.features[k]) continue;
+        this.items[k] = ["ore"];
+        placed++;
+      }
+    }
+  }
+
+  placeEnemies() {
+    const density = this.cfg.enemy_density;
+    const chance = this.cfg.enemy_chance;
+    for (let z = 0; z < this.depth; z++)
+      for (let y = 0; y < this.height; y++)
+        for (let x = 0; x < this.width; x++) {
+          const k = this.key(x, y, z);
+          if (this.enemies[k]) continue;
+          const tname = this.terrains[k];
+          if (!tname) continue;
+          const pool = TERRAINS[tname]?.enemies || [];
+          if (!pool.length) continue;
+          if (density != null) {
+            const n = this.rng.int(0, density) + this.rng.int(0, density);
+            if (n <= 0) continue;
+            const list = [];
+            for (let i = 0; i < n; i++) list.push(this.rng.choice(pool));
+            this.enemies[k] = list;
+          } else if (chance != null) {
+            if (this.rng.next() >= chance) continue;
+            this.enemies[k] = [this.rng.choice(pool)];
+          }
+        }
+  }
+
+  placeBombWalls() {
+    const count = this.cfg.bomb_walls ?? 0;
+    if (count <= 0) return;
+    for (let z = 0; z < this.depth; z++) {
+      const m = this.floors[z];
+      let placed = 0, attempts = 0;
+      while (placed < count && attempts < 200) {
+        attempts++;
+        const x = this.rng.range(this.width);
+        const y = this.rng.range(this.height);
+        const walled = [];
+        for (const d of "NESW") {
+          const [dx, dy] = DELTA[d];
+          if (m.walls[`${x},${y}`][d] && m.inBounds(x + dx, y + dy)) walled.push(d);
+        }
+        if (!walled.length) continue;
+        const d = this.rng.choice(walled);
+        const [dx, dy] = DELTA[d];
+        const nx = x + dx, ny = y + dy;
+        const back = OPPOSITE[d];
+        if (this.doorReqs[`${x},${y},${z},${d}`]) continue;
+        if (this.doorReqs[`${nx},${ny},${z},${back}`]) continue;
+        m.openWall(x, y, d);
+        this.doorReqs[`${x},${y},${z},${d}`] = "bomb-1";
+        this.doorReqs[`${nx},${ny},${z},${back}`] = "bomb-1";
+        placed++;
+      }
+    }
+  }
+
+  farDeadEnd(z = 0, avoid = [0, 0]) {
+    const m = this.floors[z];
+    const dist = bfsDistances(m, avoid);
+    const sorted = [...dist.entries()].sort((a, b) => {
+      const [ax, ay] = a[0].split(",").map(Number);
+      const [bx, by] = b[0].split(",").map(Number);
+      return ax !== bx ? ax - bx : ay - by;
+    });
+    let best = null, bestD = -1;
+    for (const [k, d] of sorted) {
+      const [x, y] = k.split(",").map(Number);
+      if (x === avoid[0] && y === avoid[1]) continue;
+      if (!m.isDeadEnd(x, y)) continue;
+      if (d > bestD) { bestD = d; best = [x, y]; }
+    }
+    if (!best) {
+      for (const [k, d] of sorted) {
+        const [x, y] = k.split(",").map(Number);
+        if (x === avoid[0] && y === avoid[1]) continue;
+        if (d > bestD) { bestD = d; best = [x, y]; }
+      }
+    }
+    return best;
+  }
+
+  placeCrystal() {
+    if (!this.cfg.crystal) return;
+    const cell = this.farDeadEnd();
+    if (!cell) return;
+    const [x, y] = cell;
+    (this.items[this.key(x, y, 0)] ||= []).push("crystal");
+    (this.features[this.key(x, y, 0)] ||= []).push("crystal_chamber");
+    this.enemies[this.key(x, y, 0)] = [this.cfg.boss || "dragon"];
+  }
+
+  placeShrine() {
+    const cfg = this.cfg.shrine;
+    if (!cfg) return;
+    const cell = this.farDeadEnd();
+    if (!cell) return;
+    const [sx, sy] = cell;
+    const m = this.floors[0];
+    const ex = m.exits(sx, sy);
+    if (!ex.length) return;
+    const ed = ex[0];
+    const [dx, dy] = DELTA[ed];
+    const nx = sx + dx, ny = sy + dy;
+    if (!m.inBounds(nx, ny)) return;
+    const back = OPPOSITE[ed];
+    this.doorReqs[`${nx},${ny},0,${back}`] = cfg.requires;
+    (this.items[this.key(sx, sy, 0)] ||= []).push(cfg.victory_item);
+    (this.features[this.key(sx, sy, 0)] ||= []).push("shrine");
+    if (this.cfg.boss) this.enemies[this.key(sx, sy, 0)] = [this.cfg.boss];
+  }
+
+  clearStart() {
+    const [sx, sy, sz] = this.cfg.start || [0, 0, 0];
+    delete this.enemies[this.key(sx, sy, sz)];
+  }
+
+  setTeleport(x, y, z, dir, target) {
+    this.teleports[`${x},${y},${z},${dir}`] = target;
+  }
+
+  composeDescriptions() {
+    const patterns = DESCRIPTION_SETS[this.cfg.description_set]?.patterns
+      || ["You are in {terrain}."];
+    for (let z = 0; z < this.depth; z++)
+      for (let y = 0; y < this.height; y++)
+        for (let x = 0; x < this.width; x++)
+          this.descriptions[this.key(x, y, z)] = this.describe(x, y, z, patterns);
+  }
+
+  describe(x, y, z, patterns) {
+    const k = this.key(x, y, z);
+    const tname = this.terrains[k] || "?";
+    const terrain = TERRAINS[tname]?.description || tname;
+    const feats = this.features[k] || [];
+    const m = this.floors[z];
+    const exits = [...m.exits(x, y)];
+    for (const d of "UD") {
+      if (this.teleports[`${x},${y},${z},${d}`]) exits.push(d);
+      else {
+        const key = d === "U" ? "stairs_up" : "stairs_down";
+        if (feats.includes(key)) exits.push(d);
+      }
+    }
+    const exitsText = formatExits(exits);
+    const featureText = feats.map(f => FEATURE_PHRASES[f] || "").join("");
+    const pattern = patterns[this.descrRng.range(patterns.length)];
+    return pattern
+      .replace(/{terrain}/g, terrain)
+      .replace(/{Terrain}/g, terrain ? terrain[0].toUpperCase() + terrain.slice(1) : "")
+      .replace(/{exits}/g, exitsText)
+      .replace(/{Exits}/g, exitsText ? exitsText[0].toUpperCase() + exitsText.slice(1) : "")
+      .replace(/{feature}/g, featureText);
+  }
+}
+
+function parseRequirement(text) {
+  const m = String(text).trim().match(/^(.+?)-(\d+)$/);
+  if (m) {
+    const name = m[1].trim();
+    const consume = parseInt(m[2], 10);
+    return {
+      name, consume,
+      kind: SKILL_NAMES.has(name) ? "skill" : (consume > 0 ? "consumable" : "item"),
+    };
+  }
+  const name = String(text).trim();
+  return { name, consume: 0, kind: SKILL_NAMES.has(name) ? "skill" : "item" };
+}
+
+function parseItemSpec(spec) {
+  let s = String(spec);
+  let price = null;
+  const atIdx = s.lastIndexOf("@");
+  if (atIdx >= 0) {
+    const p = parseInt(s.slice(atIdx + 1), 10);
+    if (!Number.isNaN(p)) price = p;
+    s = s.slice(0, atIdx);
+  }
+  let count = 1;
+  const plusIdx = s.indexOf("+");
+  if (plusIdx >= 0) {
+    const c = parseInt(s.slice(plusIdx + 1), 10);
+    if (!Number.isNaN(c)) count = 1 + c;
+    s = s.slice(0, plusIdx);
+  }
+  return { name: s.trim(), count, price, requirements: [] };
+}
+
+function parseTeleport(text) {
+  const s = String(text).replace(/^</, "").replace(/>$/, "");
+  const [mapName, coords] = s.split(":");
+  const [x, y, z, entrance] = coords.split(",");
+  return {
+    map: mapName.trim(),
+    x: parseInt(x, 10), y: parseInt(y, 10), z: parseInt(z, 10),
+    entranceDir: entrance.trim(),
+  };
+}
+
+function buildRoom(level, x, y, z) {
+  const k = level.key(x, y, z);
+  const m = level.floors[z];
+  const zone = { doors: {}, enemies: [], items: [] };
+
+  for (const d of "NESW") {
+    if (m.walls[`${x},${y}`][d]) continue;
+    const door = { reach: null, pass: [], teleport: null };
+    const req = level.doorReqs[`${x},${y},${z},${d}`];
+    if (req) door.pass.push(parseRequirement(req));
+    zone.doors[d] = door;
+  }
+  for (const d of "UD") {
+    const tp = level.teleports[`${x},${y},${z},${d}`];
+    if (tp) {
+      zone.doors[d] = { reach: null, pass: [], teleport: parseTeleport(tp) };
+    } else {
+      const feats = level.features[k] || [];
+      const key = d === "U" ? "stairs_up" : "stairs_down";
+      if (feats.includes(key)) zone.doors[d] = { reach: null, pass: [], teleport: null };
+    }
+  }
+
+  const enemyList = level.enemies[k] || [];
+  const counts = {};
+  for (const name of enemyList) counts[name] = (counts[name] || 0) + 1;
+  zone.enemies = Object.entries(counts).map(([name, count]) => [name, count]);
+
+  for (const spec of level.items[k] || []) zone.items.push(parseItemSpec(spec));
+
+  return {
+    map: level.name,
+    x, y, z,
+    description: level.descriptions[k] || "",
+    zones: [zone],
+  };
+}
+
+class World {
+  constructor(config) {
+    this.config = config;
+    this.seed = config.seed;
+    this.rng = new RNG(config.seed);
+    this.levels = {};
+    this.rooms = {};
+  }
+
+  generate() {
+    for (const mcfg of this.config.maps) {
+      const lvl = new Level(mcfg, this.config, this.rng);
+      lvl.generate();
+      this.levels[mcfg.name] = lvl;
+    }
+    this.linkDungeons();
+    for (const lvl of Object.values(this.levels)) lvl.composeDescriptions();
+    this.buildRooms();
+  }
+
+  linkDungeons() {
+    const ow = this.levels.overworld;
+    if (!ow) return;
+    const m = ow.floors[0];
+    const used = new Set();
+    const cells = [];
+    for (let y = 0; y < ow.height; y++)
+      for (let x = 0; x < ow.width; x++) cells.push([x, y]);
+    const dead = cells.filter(([x, y]) => m.isDeadEnd(x, y));
+    const other = cells.filter(([x, y]) => !m.isDeadEnd(x, y));
+    this.rng.shuffle(dead);
+    this.rng.shuffle(other);
+    const ordered = [...dead, ...other];
+
+    for (const [name, lvl] of Object.entries(this.levels)) {
+      if (name === "overworld") continue;
+      const cell = ordered.find(c => !used.has(`${c[0]},${c[1]}`));
+      if (!cell) continue;
+      used.add(`${cell[0]},${cell[1]}`);
+      const [ox, oy] = cell;
+      const dm = lvl.floors[0];
+      const dmExits = dm.exits(0, 0);
+      if (!dmExits.length) continue;
+      const entryDir = dmExits[0];
+      const owExits = m.exits(ox, oy);
+      const backDir = owExits.length ? owExits[0] : "N";
+      ow.setTeleport(ox, oy, 0, "D", `<${name}:0,0,0,${entryDir}>`);
+      lvl.setTeleport(0, 0, 0, "U", `<overworld:${ox},${oy},0,${backDir}>`);
+    }
+  }
+
+  buildRooms() {
+    for (const [name, lvl] of Object.entries(this.levels)) {
+      for (let z = 0; z < lvl.depth; z++)
+        for (let y = 0; y < lvl.height; y++)
+          for (let x = 0; x < lvl.width; x++)
+            this.rooms[`${name}|${x},${y},${z}`] = buildRoom(lvl, x, y, z);
+    }
+  }
+
+  getRoom(mapName, x, y, z) {
+    return this.rooms[`${mapName}|${x},${y},${z}`] || null;
+  }
+
+  mapNames() { return Object.keys(this.levels); }
+
+  dimensions(mapName) {
+    const lvl = this.levels[mapName];
+    if (!lvl) return { x: 0, y: 0, z: 0 };
+    return { x: lvl.width, y: lvl.height, z: lvl.depth };
+  }
+}
+
+// ============================================================================
+// PLAYER
+// ============================================================================
+
+class Player {
+  constructor(data = {}) {
+    this.inventory  = data.inventory  ? { ...data.inventory }  : {};
+    this.skills     = data.skills     ? { ...data.skills }     : { fight: 0, avoidance: 0, search: 0 };
+    this.map        = data.map        ?? "overworld";
+    this.x          = data.x          ?? 0;
+    this.y          = data.y          ?? 0;
+    this.z          = data.z          ?? 1;
+    this.zone       = data.zone       ?? 0;
+    this.swordLevel = data.swordLevel ?? 0;
+    this.coins      = data.coins      ?? 0;
+    this.won        = data.won        ?? false;
+    this.hp         = data.hp         ?? 5;
+    this.maxHp      = data.maxHp      ?? 5;
+  }
+  takeDamage(n) { this.hp = Math.max(0, this.hp - n); }
+  healFull() { this.hp = this.maxHp; }
+  addItem(name, count = 1) {
+    this.inventory[name] = (this.inventory[name] || 0) + count;
+  }
+  removeItem(name, count = 1) {
+    if ((this.inventory[name] || 0) >= count) {
+      this.inventory[name] -= count;
+      if (this.inventory[name] === 0) delete this.inventory[name];
+      return true;
+    }
+    return false;
+  }
+  hasItem(name, count = 1) { return (this.inventory[name] || 0) >= count; }
+  getSkill(s) { return this.skills[s] || 0; }
+  increaseSkill(s) { this.skills[s] = (this.skills[s] || 0) + 1; }
+  spendCoins(n) {
+    if (this.coins >= n) { this.coins -= n; return true; }
+    return false;
+  }
+  grant(name, count = 1) {
+    if (name === "sword") this.swordLevel += 1;
+    else this.addItem(name, count);
+  }
+  toJSON() {
+    return {
+      inventory: this.inventory, skills: this.skills,
+      map: this.map, x: this.x, y: this.y, z: this.z, zone: this.zone,
+      swordLevel: this.swordLevel, coins: this.coins, won: this.won,
+      hp: this.hp, maxHp: this.maxHp,
+    };
+  }
+  static fromJSON(d) { return new Player(d); }
+}
+
+// ============================================================================
+// ROOM STATE
+// ============================================================================
+
+class RoomState {
+  constructor(room, player) {
+    this.room = room;
+    this.player = player;
+    this.currentZone = (player.zone >= 0 && player.zone < room.zones.length) ? player.zone : 0;
+    this.zoneCleared = room.zones.map(() => false);
+  }
+  zoneEntryRequirement(idx) {
+    const z = this.room.zones[idx];
+    const dirs = Object.keys(z.doors);
+    if (!dirs.length) return null;
+    return z.doors[dirs[0]].reach;
+  }
+  canEnterZone(idx) {
+    if (idx < 0 || idx >= this.room.zones.length) return false;
+    if (idx === this.currentZone) return true;
+    const req = this.zoneEntryRequirement(idx);
+    if (!req) return true;
+    if (req.kind === "consumable") return this.player.hasItem(req.name, req.consume);
+    if (req.kind === "skill") return this.player.getSkill(req.name) > 0;
+    return this.player.hasItem(req.name);
+  }
+  enterZone(idx) {
+    if (!this.canEnterZone(idx)) return false;
+    const req = this.zoneEntryRequirement(idx);
+    if (req) {
+      if (req.kind === "consumable") {
+        this.player.removeItem(req.name, req.consume);
+        const z = this.room.zones[idx];
+        const dirs = Object.keys(z.doors);
+        if (dirs.length) z.doors[dirs[0]].reach = null;
+      } else if (req.kind === "skill") {
+        this.player.increaseSkill(req.name);
+      }
+    }
+    this.currentZone = idx;
+    this.player.zone = idx;
+    return true;
+  }
+  currentDoors() { return this.room.zones[this.currentZone].doors; }
+  isDoorVisible(dir) {
+    const di = this.currentDoors()[dir];
+    if (!di) return false;
+    if (di.pass.length && di.pass[0].name === "search") return false;
+    return true;
+  }
+  isItemVisible(name) {
+    for (const item of this.room.zones[this.currentZone].items)
+      if (item.name === name) {
+        if (item.requirements.length && item.requirements[0].name === "search") return false;
+        return true;
+      }
+    return false;
+  }
+  canUseDoor(dir) {
+    if (!this.isDoorVisible(dir)) return false;
+    const di = this.currentDoors()[dir];
+    if (!di.pass.length) return true;
+    const req = di.pass[0];
+    if (req.kind === "consumable") return this.player.hasItem(req.name, req.consume);
+    if (req.kind === "skill") return this.player.getSkill(req.name) > 0;
+    return this.player.hasItem(req.name);
+  }
+  useDoor(dir) {
+    if (!this.canUseDoor(dir)) return false;
+    const di = this.currentDoors()[dir];
+    if (di.pass.length) {
+      const req = di.pass[0];
+      if (req.kind === "consumable") {
+        if (!this.player.hasItem(req.name, req.consume)) return false;
+        this.player.removeItem(req.name, req.consume);
+      } else if (req.kind === "skill") {
+        if (this.player.getSkill(req.name) <= 0) return false;
+        this.player.increaseSkill(req.name);
+      } else {
+        if (!this.player.hasItem(req.name)) return false;
+      }
+      di.pass.shift();
+    }
+    return true;
+  }
+  searchZone(dir = null) {
+    const revealed = [];
+    if (dir) {
+      const di = this.currentDoors()[dir];
+      if (di && di.pass.length && di.pass[0].name === "search") {
+        di.pass.shift();
+        revealed.push(`Door ${dir}`);
+      }
+    } else {
+      for (const [d, di] of Object.entries(this.currentDoors()))
+        if (di.pass.length && di.pass[0].name === "search") {
+          di.pass.shift();
+          revealed.push(`Door ${d}`);
+        }
+      for (const item of this.room.zones[this.currentZone].items)
+        if (item.requirements.length && item.requirements[0].name === "search") {
+          item.requirements.shift();
+          revealed.push(`Item ${item.name}`);
+        }
+    }
+    this.player.increaseSkill("search");
+    if (revealed.length) return { ok: true, msg: "You search and discover: " + revealed.join(", ") };
+    return { ok: true, msg: "You search but find nothing new." };
+  }
+  currentEnemies() {
+    if (this.zoneCleared[this.currentZone]) return [];
+    return this.room.zones[this.currentZone].enemies;
+  }
+  enemyPower(enemies) {
+    let t = 0;
+    for (const [name, count] of enemies) t += (ENEMIES[name]?.difficulty ?? 1) * count;
+    return t;
+  }
+  rollDrops(enemies) {
+    const totals = {};
+    for (const [name, count] of enemies) {
+      const items = (DROPS[name] || {}).items || {};
+      if (!Object.keys(items).length) continue;
+      for (let i = 0; i < count; i++)
+        for (const [iname, irange] of Object.entries(items)) {
+          const n = Array.isArray(irange)
+            ? Math.floor(Math.random() * (irange[1] - irange[0] + 1)) + irange[0]
+            : irange;
+          if (n) totals[iname] = (totals[iname] || 0) + n;
+        }
+    }
+    return totals;
+  }
+  fightEnemies(combat) {
+    const enemies = this.currentEnemies();
+    if (!enemies.length) return { ok: false, msg: "No enemies here." };
+    const ep = this.enemyPower(enemies);
+    const pool = 1 + this.player.getSkill("fight") + 20 * this.player.swordLevel;
+    const roll = Math.floor(Math.random() * (pool + 1));
+    const enemyRoll = Math.floor(Math.random() * (ep + 1));
+    if (roll < enemyRoll) {
+      const dmg = combat.damage_per_fail;
+      this.player.takeDamage(dmg);
+      return { ok: false, msg: `You are driven back! (-${dmg} HP) (you ${roll} vs them ${enemyRoll}; FP ${pool} vs EP ${ep})` };
+    }
+    this.player.increaseSkill("fight");
+    const loot = this.rollDrops(enemies);
+    this.zoneCleared[this.currentZone] = true;
+    this.room.zones[this.currentZone].enemies = [];
+    let msg = `You defeat the enemies! (you ${roll} vs them ${enemyRoll}; FP ${pool} vs EP ${ep})`;
+    const keys = Object.keys(loot).sort();
+    if (keys.length) {
+      const parts = [];
+      for (const iname of keys) {
+        const n = loot[iname];
+        this.player.grant(iname, n);
+        parts.push(n === 1 ? iname : `${iname} x${n}`);
+      }
+      msg += " You collect " + parts.join(", ") + ".";
+    }
+    return { ok: true, msg };
+  }
+  avoidEnemies(combat) {
+    const enemies = this.currentEnemies();
+    if (!enemies.length) return { ok: false, msg: "No enemies here." };
+    const ep = this.enemyPower(enemies);
+    const pool = 1 + this.player.getSkill("avoidance");
+    const roll = Math.floor(Math.random() * (pool + 1));
+    const enemyRoll = Math.floor(Math.random() * (ep + 1));
+    if (roll < enemyRoll) {
+      const dmg = combat.damage_per_fail;
+      this.player.takeDamage(dmg);
+      return { ok: false, msg: `You fail to slip past. (-${dmg} HP) (you ${roll} vs them ${enemyRoll}; AP ${pool} vs EP ${ep})` };
+    }
+    this.player.increaseSkill("avoidance");
+    return { ok: true, msg: `You slip past the enemies! (you ${roll} vs them ${enemyRoll}; AP ${pool} vs EP ${ep})` };
+  }
+  clearWithFire() {
+    const enemies = this.currentEnemies();
+    if (!enemies.length) return { ok: false, msg: "No enemies here." };
+    this.zoneCleared[this.currentZone] = true;
+    this.room.zones[this.currentZone].enemies = [];
+    this.player.increaseSkill("avoidance");
+    return { ok: true, msg: "You hurl the fire. It flares, and the enemies scatter into the dark. You slip through unseen. (avoidance +1)" };
+  }
+  currentItems() {
+    return this.room.zones[this.currentZone].items.filter(it => this.isItemVisible(it.name));
+  }
+  consumeRequirement(item) {
+    if (!item.requirements.length) return { ok: true, msg: null };
+    const req = item.requirements[0];
+    if (req.kind === "consumable") {
+      if (!this.player.hasItem(req.name, req.consume)) return { ok: false, msg: `You need ${req.name}.` };
+      this.player.removeItem(req.name, req.consume);
+    } else if (req.kind === "skill") {
+      if (this.player.getSkill(req.name) <= 0) return { ok: false, msg: `You need ${req.name} skill.` };
+      this.player.increaseSkill(req.name);
+    } else {
+      if (!this.player.hasItem(req.name)) return { ok: false, msg: `You need ${req.name}.` };
+    }
+    item.requirements.shift();
+    return { ok: true, msg: `You uncover the ${item.name}.` };
+  }
+  findItem(name) {
+    const items = this.room.zones[this.currentZone].items;
+    for (let i = 0; i < items.length; i++)
+      if (items[i].name === name) return { i, item: items[i] };
+    return { i: -1, item: null };
+  }
+  takeItem(name) {
+    if (!this.isItemVisible(name)) return { ok: false, msg: "You don't see that here." };
+    const { i, item } = this.findItem(name);
+    if (!item) return { ok: false, msg: "That item is not here." };
+    if (item.price !== null) return { ok: false, msg: `The ${item.name} is for sale (${item.price} coins). Try 'buy ${item.name}'.` };
+    const res = this.consumeRequirement(item);
+    if (!res.ok) return res;
+    if (res.msg) return res;
+    this.room.zones[this.currentZone].items.splice(i, 1);
+    this.player.grant(item.name, item.count);
+    return { ok: true, msg: `You take ${item.name} x${item.count}.` };
+  }
+  buyItem(name) {
+    if (!this.isItemVisible(name)) return { ok: false, msg: "You don't see that here." };
+    const { i, item } = this.findItem(name);
+    if (!item) return { ok: false, msg: "That item is not here." };
+    if (item.price === null) return { ok: false, msg: `The ${item.name} isn't for sale.` };
+    const res = this.consumeRequirement(item);
+    if (!res.ok) return res;
+    if (res.msg) return res;
+    if (!this.player.spendCoins(item.price))
+      return { ok: false, msg: `You need ${item.price} coins (you have ${this.player.coins}).` };
+    if (item.count > 1) {
+      item.count -= 1;
+      this.player.grant(item.name, 1);
+      return { ok: true, msg: `You buy ${item.name} for ${item.price} coins. (${item.count} remaining)` };
+    }
+    this.room.zones[this.currentZone].items.splice(i, 1);
+    this.player.grant(item.name, 1);
+    return { ok: true, msg: `You buy ${item.name} for ${item.price} coins.` };
+  }
+}
+
+// ============================================================================
+// SESSION
+// ============================================================================
+
+class Session {
+  constructor(world, player, opts = {}) {
+    this.world = world;
+    this.player = player;
+    this.combat = opts.combat || world.config.combat;
+    this.goal = opts.goal || world.config.goal;
+    this.deltas = opts.deltas || {};
+    this.lastMoveDir = opts.lastMoveDir || null;
+    this.roomState = null;
+    this.loadCurrentRoom();
+  }
+
+  loadCurrentRoom() {
+    const p = this.player;
+    const key = `${p.map}|${p.x},${p.y},${p.z}`;
+    let room = this.deltas[key];
+    if (!room) {
+      const pristine = this.world.getRoom(p.map, p.x, p.y, p.z);
+      if (!pristine) { this.roomState = null; return; }
+      room = JSON.parse(JSON.stringify(pristine));
+      this.deltas[key] = room;
+    }
+    this.roomState = new RoomState(room, this.player);
+  }
+
+  findZoneForEntrance(room, dir) {
+    for (let i = 0; i < room.zones.length; i++)
+      if (room.zones[i].doors[dir]) return i;
+    return 0;
+  }
+
+  neighborCoords(dir) {
+    const [dx, dy, dz] = DELTA[dir] || [0, 0, 0];
+    return [this.player.x + dx, this.player.y + dy, this.player.z + dz];
+  }
+
+  unlockNeighbor(mapName, x, y, z, dir, reqName) {
+    const key = `${mapName}|${x},${y},${z}`;
+    let room = this.deltas[key];
+    if (!room) {
+      const pristine = this.world.getRoom(mapName, x, y, z);
+      if (!pristine) return;
+      room = JSON.parse(JSON.stringify(pristine));
+      this.deltas[key] = room;
+    }
+    for (const zone of room.zones) {
+      const di = zone.doors[dir];
+      if (di && di.pass.length && di.pass[0].name === reqName) {
+        di.pass.shift();
+        return;
+      }
+    }
+  }
+
+  enemyBlock(emit) {
+    if (!this.roomState) return true;
+    const enemies = this.roomState.currentEnemies();
+    if (!enemies.length) return true;
+    const res = this.roomState.avoidEnemies(this.combat);
+    if (!res.ok) { emit(`Enemies block your way! ${res.msg}`); return false; }
+    emit(`You slip past the enemies! ${res.msg}`);
+    return true;
+  }
+
+  moveThroughDoor(dir) {
+    if (!this.roomState) return { ok: false, msg: "No room." };
+    const rs = this.roomState;
+    if (!["N", "E", "S", "W", "U", "D"].includes(dir))
+      return { ok: false, msg: "Invalid direction." };
+    if (!rs.isDoorVisible(dir))
+      return { ok: false, msg: "There is no door in that direction." };
+    if (!rs.canUseDoor(dir)) {
+      const di = rs.currentDoors()[dir];
+      if (!di) return { ok: false, msg: "No door there." };
+      if (di.pass.length) return { ok: false, msg: `You need ${di.pass[0].name}.` };
+      return { ok: false, msg: "Cannot go that way." };
+    }
+    const diPre = rs.currentDoors()[dir];
+    let consumedReq = null;
+    if (diPre.pass.length && diPre.pass[0].kind === "consumable")
+      consumedReq = diPre.pass[0].name;
+    if (!rs.useDoor(dir)) return { ok: false, msg: "Failed to use door." };
+    const di = rs.currentDoors()[dir];
+    const oldMap = this.player.map, oldX = this.player.x, oldY = this.player.y, oldZ = this.player.z;
+    if (di && di.teleport) {
+      const t = di.teleport;
+      if (!this.world.mapNames().includes(t.map))
+        return { ok: false, msg: `Unknown map '${t.map}'.` };
+      const targetRoom = this.world.getRoom(t.map, t.x, t.y, t.z);
+      if (!targetRoom) return { ok: false, msg: "Destination doesn't exist." };
+      this.player.map = t.map;
+      this.player.x = t.x; this.player.y = t.y; this.player.z = t.z;
+      this.player.zone = this.findZoneForEntrance(targetRoom, t.entranceDir);
+      this.loadCurrentRoom();
+      this.lastMoveDir = dir;
+      return { ok: true, msg: `Teleported to ${t.map} (${t.x},${t.y},${t.z}).` };
+    }
+    let dx = 0, dy = 0, dz = 0;
+    if (dir === "N") dy = 1;
+    else if (dir === "S") dy = -1;
+    else if (dir === "E") dx = 1;
+    else if (dir === "W") dx = -1;
+    else if (dir === "U") dz = 1;
+    else if (dir === "D") dz = -1;
+    const nx = oldX + dx, ny = oldY + dy, nz = oldZ + dz;
+    const dims = this.world.dimensions(this.player.map);
+    if (!(nx >= 0 && nx < dims.x && ny >= 0 && ny < dims.y && nz >= 0 && nz < dims.z))
+      return { ok: false, msg: "Out of world." };
+    if (consumedReq)
+      this.unlockNeighbor(oldMap, nx, ny, nz, OPPOSITE[dir], consumedReq);
+    this.player.x = nx; this.player.y = ny; this.player.z = nz;
+    this.player.zone = 0;
+    this.loadCurrentRoom();
+    this.lastMoveDir = dir;
+    return { ok: true, msg: `You move ${dir}.` };
+  }
+
+  openDoorWithItem(dir, itemName) {
+    const rs = this.roomState;
+    if (!rs) return { ok: false, msg: "No room." };
+    const di = rs.currentDoors()[dir];
+    if (!di) return { ok: false, msg: `No door ${dir}.` };
+    if (!(di.pass.length && di.pass[0].name === itemName))
+      return { ok: false, msg: `${dir} door doesn't need ${itemName}.` };
+    const req = di.pass[0];
+    const consumed = req.kind === "consumable";
+    if (!rs.useDoor(dir)) return { ok: false, msg: "Cannot use that." };
+    if (consumed) {
+      const [nx, ny, nz] = this.neighborCoords(dir);
+      this.unlockNeighbor(this.player.map, nx, ny, nz, OPPOSITE[dir], req.name);
+    }
+    return { ok: true, msg: `Used ${itemName} on ${dir} door.` };
+  }
+
+  useItem(item, dir = null) {
+    const heartItem   = this.combat.heart_item;
+    const shelterItem = this.combat.shelter_item;
+    const fireItem    = this.combat.fire_item;
+
+    if (item === fireItem) {
+      if (dir) return { ok: false, msg: "Fire doesn't take a direction." };
+      if (!this.player.hasItem(fireItem)) return { ok: false, msg: `You have no ${fireItem}.` };
+      if (!this.roomState) return { ok: false, msg: "No room." };
+      const res = this.roomState.clearWithFire();
+      if (res.ok) this.player.removeItem(fireItem, 1);
+      return res;
+    }
+    if (item === shelterItem) {
+      if (!this.player.hasItem(shelterItem)) return { ok: false, msg: `You have no ${shelterItem}.` };
+      this.player.removeItem(shelterItem, 1);
+      this.player.healFull();
+      return { ok: true, msg: "You rest by the fire and recover your strength." };
+    }
+    if (item === heartItem) {
+      if (!this.player.hasItem(heartItem)) return { ok: false, msg: `You have no ${heartItem}.` };
+      this.player.removeItem(heartItem, 1);
+      this.player.maxHp += 1;
+      this.player.hp = Math.min(this.player.hp + 1, this.player.maxHp);
+      return { ok: true, msg: `Your maximum HP rises to ${this.player.maxHp}.` };
+    }
+    if (!this.roomState) return { ok: false, msg: "No room." };
+    const rs = this.roomState;
+    if (item === "fight")     return rs.fightEnemies(this.combat);
+    if (item === "avoidance") return rs.avoidEnemies(this.combat);
+    if (item === "search")    return rs.searchZone(dir);
+    if (dir) return this.openDoorWithItem(dir, item);
+    const candidates = [];
+    for (const [d, di] of Object.entries(rs.currentDoors()))
+      if (di.pass.length && di.pass[0].name === item) candidates.push(d);
+    if (!candidates.length) return { ok: false, msg: `No door requires ${item}.` };
+    if (candidates.length > 1) return { ok: false, msg: `Multiple doors require ${item}; specify direction.` };
+    return this.openDoorWithItem(candidates[0], item);
+  }
+
+  takeItem(name) {
+    if (!this.roomState) return { ok: false, msg: "No room." };
+    return this.roomState.takeItem(name);
+  }
+
+  buyItem(name) {
+    if (!this.roomState) return { ok: false, msg: "No room." };
+    return this.roomState.buyItem(name);
+  }
+
+  findRecipe(inputs) {
+    const sig = Object.entries(inputs).sort().map(([k, v]) => `${k}:${v}`).join("|");
+    for (const r of RECIPES) {
+      const rsig = Object.entries(r.inputs).sort().map(([k, v]) => `${k}:${v}`).join("|");
+      if (rsig === sig) return r;
+    }
+    return null;
+  }
+
+  combine(inputs) {
+    const pretty = Object.entries(inputs).sort()
+      .map(([n, c]) => c > 1 ? `${n} x${c}` : n).join(" + ");
+    const recipe = this.findRecipe(inputs);
+    if (!recipe) return { ok: false, msg: `You don't know how to combine ${pretty}.` };
+    for (const [name, count] of Object.entries(inputs))
+      if (!this.player.hasItem(name, count))
+        return { ok: false, msg: `You need ${count} ${name}.` };
+    for (const [name, count] of Object.entries(inputs))
+      this.player.removeItem(name, count);
+    const out = recipe.output;
+    const outCount = out.count || 1;
+    this.player.grant(out.item, outCount);
+    if (outCount > 1) return { ok: true, msg: `You combine ${pretty} into ${out.item} x${outCount}.` };
+    return { ok: true, msg: `You combine ${pretty} into ${out.item}.` };
+  }
+
+  checkDeath(emit) {
+    if (this.player.hp > 0) return;
+    const cfg = this.combat.death;
+    emit("");
+    emit("You collapse.");
+    if (cfg.restore_hp) this.player.healFull();
+    const frac = cfg.coin_loss_fraction;
+    if (frac > 0 && this.player.coins > 0) {
+      const lost = Math.floor(this.player.coins * frac);
+      this.player.coins -= lost;
+      emit(`You wake at the entrance. You lost ${lost} coins.`);
+    } else {
+      emit("You wake at the entrance.");
+    }
+    if (this.player.map === "overworld") {
+      this.player.x = 0; this.player.y = 0; this.player.z = 1;
+    } else {
+      this.player.x = 0; this.player.y = 0; this.player.z = 0;
+    }
+    this.player.zone = 0;
+    this.loadCurrentRoom();
+  }
+
+  handleCommand(cmd) {
+    const out = [];
+    const emit = s => out.push(String(s ?? ""));
+    let endedReason = null;
+
+    cmd = cmd.trim();
+    if (!cmd) return { lines: out, endedReason };
+
+    const parts = cmd.toLowerCase().split(/\s+/);
+    const action = parts[0];
+
+    const heartItem   = this.combat.heart_item;
+    const shelterItem = this.combat.shelter_item;
+    const fireItem    = this.combat.fire_item;
+
+    const isFight = action === "fight" || (action === "use" && parts[1] === "fight");
+    const isFlee  = action === "flee" || action === "avoid"
+                 || (action === "use" && ["avoidance", "flee", "avoid"].includes(parts[1]));
+    const isHeal  = action === "use" && [heartItem, shelterItem].includes(parts[1]);
+    const isFire  = action === "use" && parts[1] === fireItem;
+    const isMeta  = ["save", "quit", "exit", "reset", "retreat"].includes(action) || isHeal || isFire;
+
+    if (!isFight && !isFlee && !isMeta) {
+      if (!this.enemyBlock(emit)) { this.checkDeath(emit); return { lines: out, endedReason }; }
+    }
+
+    if (action === "quit" || action === "exit") {
+      this.save();
+      emit("Saved. Bye!");
+      endedReason = "quit";
+    } else if (action === "save") {
+      this.save();
+      emit("Saved.");
+    } else if (action === "reset") {
+      emit("Reset not supported in the browser.");
+    } else if (action === "retreat") {
+      if (!this.lastMoveDir) emit("You can't retreat; you haven't moved yet.");
+      else {
+        const back = OPPOSITE[this.lastMoveDir];
+        const r = this.moveThroughDoor(back);
+        emit(`You retreat. ${r.msg}`);
+      }
+    } else if (action === "move") {
+      if (parts.length < 2) { emit("Move where?"); this.checkDeath(emit); return { lines: out, endedReason }; }
+      const r = this.moveThroughDoor(parts[1].toUpperCase());
+      emit(r.msg);
+    } else if (action === "use") {
+      if (parts.length < 2) { emit("Use what?"); this.checkDeath(emit); return { lines: out, endedReason }; }
+      const item = parts[1];
+      const dir = parts.length >= 3 ? parts[2].toUpperCase() : null;
+      const r = this.useItem(item, dir);
+      emit(r.msg);
+    } else if (action === "combine" || action === "craft" || action === "make") {
+      if (parts.length < 2) { emit("Combine what? e.g. 'combine rock rock'"); this.checkDeath(emit); return { lines: out, endedReason }; }
+      const inputs = {};
+      for (const name of parts.slice(1)) inputs[name] = (inputs[name] || 0) + 1;
+      const r = this.combine(inputs);
+      emit(r.msg);
+    } else if (action === "fight") {
+      const r = this.useItem("fight"); emit(r.msg);
+    } else if (action === "flee" || action === "avoid") {
+      const r = this.useItem("avoidance"); emit(r.msg);
+    } else if (action === "take") {
+      if (parts.length < 2) { emit("Take what?"); this.checkDeath(emit); return { lines: out, endedReason }; }
+      const name = parts[1];
+      const r = this.takeItem(name);
+      emit(r.msg);
+      if (r.ok) {
+        const victoryItem = this.goal?.victory_item;
+        if (victoryItem && name === victoryItem) {
+          emit("");
+          emit("=".repeat(52));
+          emit("  VICTORY");
+          emit("=".repeat(52));
+          emit(this.goal.victory_message || "You have saved the world.");
+          emit("");
+          this.player.won = true;
+          this.save();
+          emit("Your legend is saved. Farewell.");
+          endedReason = "victory";
+        }
+      }
+    } else if (action === "buy") {
+      if (parts.length < 2) { emit("Buy what?"); this.checkDeath(emit); return { lines: out, endedReason }; }
+      const r = this.buyItem(parts[1]); emit(r.msg);
+    } else if (action === "enter") {
+      if (parts.length < 2) { emit("Enter which zone?"); this.checkDeath(emit); return { lines: out, endedReason }; }
+      const z = parseInt(parts[1], 10) - 1;
+      if (Number.isNaN(z)) { emit("Invalid zone."); this.checkDeath(emit); return { lines: out, endedReason }; }
+      if (this.roomState && this.roomState.enterZone(z)) emit(`Moved to zone ${z + 1}.`);
+      else emit("Cannot enter that zone.");
+    } else {
+      emit("Unknown command.");
+    }
+
+    if (!endedReason) this.checkDeath(emit);
+    return { lines: out, endedReason };
+  }
+
+  save() {
+    try {
+      const data = {
+        version: 1,
+        world: this.world.config,
+        player: this.player.toJSON(),
+        deltas: this.deltas,
+        lastMoveDir: this.lastMoveDir,
+      };
+      localStorage.setItem("pydventure.save", JSON.stringify(data));
+    } catch (e) {
+      console.warn("Save failed:", e);
+    }
+  }
+}
+
+// ============================================================================
+// STATE SHAPING — session → render state
+// ============================================================================
+
+function pickTerrain(description) {
+  const low = (description || "").toLowerCase();
+  const rules = [
+    ["dead plain", "dead_plain"],
+    ["lake bed", "lakebed"],
+    ["tombs", "lakebed"],
+    ["stone hall", "stone_hall"],
+    ["black stone", "shrine"],
+    ["forest", "forest"],
+    ["valley", "valley"],
+    ["boulders", "valley"],
+    ["plain", "plains"],
+    ["cave", "cave"],
+    ["crypt", "crypt"],
+    ["armory", "armory"],
+    ["library", "library"],
+    ["sanctum", "sanctum"],
+  ];
+  for (const [kw, t] of rules) if (low.includes(kw)) return t;
+  return "cave";
+}
+
+function stateFromSession(session) {
+  const p = session.player;
+  const rs = session.roomState;
+  const goal = session.goal;
+
+  let room = null;
+  if (rs) {
+    const doors = {};
+    for (const dir of ["N", "E", "S", "W", "U", "D"]) {
+      const di = rs.currentDoors()[dir];
+      if (!di || !rs.isDoorVisible(dir)) { doors[dir] = { present: false }; continue; }
+      doors[dir] = {
+        present: true,
+        locked: di.pass.length > 0,
+        label: di.pass.length > 0 ? di.pass[0].name : null,
+        teleport: di.teleport ? di.teleport.map : null,
+      };
+    }
+    const enemies = rs.currentEnemies();
+    const enemyPower = rs.enemyPower(enemies);
+    const items = rs.currentItems().map(it => ({
+      name: it.name, count: it.count, price: it.price,
+      requirements: it.requirements.map(r => r.name),
+    }));
+    const hasFire = p.hasItem(session.combat.fire_item);
+    room = {
+      description: rs.room.description || "",
+      zone: { index: rs.currentZone, total: rs.room.zones.length },
+      terrain: pickTerrain(rs.room.description),
+      doors,
+      enemies: enemies.map(([name, count]) => ({
+        name, count, difficulty: ENEMIES[name]?.difficulty ?? 1,
+      })),
+      enemyPower,
+      items,
+      canFight: enemies.length > 0,
+      canFlee: enemies.length > 0,
+      canFire: enemies.length > 0 && hasFire,
+    };
+  }
+
+  const goalItem = goal?.item || "crystal";
+  const goalCount = goal?.count || 0;
+  const goalHave = p.inventory[goalItem] || 0;
+
+  return {
+    gameName: session.world.config.name || "mygame",
+    player: {
+      map: p.map, x: p.x, y: p.y, z: p.z,
+      coins: p.coins, swordLevel: p.swordLevel,
+      hp: p.hp, maxHp: p.maxHp,
+      skills: p.skills, inventory: p.inventory,
+    },
+    goal: {
+      name: goal?.name || "", item: goalItem,
+      count: goalCount, have: goalHave, won: p.won,
+    },
+    room,
+  };
+}
+
+// ============================================================================
+// UI
+// ============================================================================
+
+const $ = id => document.getElementById(id);
+const els = {
+  combat:       $("combat"),
+  combatChips:  $("combat-chips"),
+  combatActs:   $("combat-actions"),
+  terrain:      $("terrain"),
+  terrainBg:    $("terrain-bg"),
+  sky:          $("sky"),
+  descText:     $("desc-text"),
+  descItems:    $("desc-items"),
+  log:          $("log"),
+  status:       $("status"),
+  welcome:      $("ov-welcome"),
+  map:          $("ov-map"),
+  mapSvg:       $("map-svg"),
+  mapStatus:    $("map-status"),
+  combine:      $("ov-combine"),
+  combineInv:   $("combine-inv"),
+  combineGo:    $("combine-go"),
+  slotA:        $("slot-a"),
+  slotB:        $("slot-b"),
+  ended:        $("ended"),
+  endedTitle:   $("ended-title"),
+  endedBody:    $("ended-body"),
+  endedClose:   $("ended-close"),
+};
+
+const TERRAIN_STYLES = {
+  forest:     { sky: ["#7a9a78", "#2a4a2a"], ground: "#1e3a1e" },
+  plains:     { sky: ["#9fb8cf", "#d8d0b8"], ground: "#b8a878" },
+  dead_plain: { sky: ["#a8a8a0", "#c8c0b0"], ground: "#6a6050" },
+  lakebed:    { sky: ["#5a6a80", "#303a48"], ground: "#2a2820" },
+  valley:     { sky: ["#8fb0d0", "#d8e0e8"], ground: "#706050" },
+  cave:       { sky: ["#0a0c10", "#14161c"], ground: "#14161c" },
+  stone_hall: { sky: ["#22242a", "#1a1c22"], ground: "#1a1c22" },
+  crypt:      { sky: ["#1a2420", "#0e1a14"], ground: "#0e1a14" },
+  armory:     { sky: ["#28201a", "#1a1410"], ground: "#1a1410" },
+  library:    { sky: ["#26180e", "#1a1008"], ground: "#1a1008" },
+  sanctum:    { sky: ["#140c1c", "#0a0810"], ground: "#0a0810" },
+  shrine:     { sky: ["#080810", "#080810"], ground: "#080810" },
+};
+
+let currentTerrain = null;
+
+function renderTerrain(terrain) {
+  if (terrain === currentTerrain) return;
+  currentTerrain = terrain;
+  const s = TERRAIN_STYLES[terrain] || TERRAIN_STYLES.cave;
+  els.sky.children[0].setAttribute("stop-color", s.sky[0]);
+  els.sky.children[1].setAttribute("stop-color", s.sky[1]);
+  els.terrain.querySelectorAll("path").forEach(p => {
+    p.setAttribute("fill", s.ground);
+  });
+}
+
+function renderStatus(state) {
+  const p = state.player;
+  const g = state.goal;
+  const parts = [
+    `<span>${state.gameName}</span>`,
+    `<span class="sep">|</span>`,
+    `<span>${p.map}:${p.x},${p.y},${p.z}</span>`,
+  ];
+  if (p.coins) parts.push(`<span class="sep">|</span><span>coins ${p.coins}</span>`);
+  parts.push(`<span class="sep">|</span><span>sword ${p.swordLevel}</span>`);
+  if (g.count) parts.push(`<span class="sep">|</span><span class="goal">${g.item} ${g.have}/${g.count}</span>`);
+  const hpClass = p.hp <= Math.ceil(p.maxHp / 2) ? "hp low" : "hp";
+  parts.push(`<span class="sep">|</span><span class="${hpClass}">hp ${p.hp}/${p.maxHp}</span>`);
+  const skillStr = Object.entries(p.skills).map(([k, v]) => `${k[0]}${v}`).join("/");
+  parts.push(`<span class="sep">|</span><span>skills ${skillStr}</span>`);
+  const inv = p.inventory;
+  const invStr = Object.keys(inv).length
+    ? Object.entries(inv).map(([k, v]) => `${k}:${v}`).join("  ")
+    : "(empty)";
+  parts.push(`<span class="sep">|</span><span class="inv">inv  ${invStr}</span>`);
+  els.status.innerHTML = parts.join("");
+}
+
+function renderCombat(room) {
+  if (!room || !room.enemies || !room.enemies.length) {
+    els.combat.hidden = true;
+    return;
+  }
+  els.combat.hidden = false;
+  const chips = room.enemies.map(e =>
+    `<span class="chip enemy">${e.name} ×${e.count} <small>d${e.difficulty}</small></span>`
+  );
+  chips.push(`<span class="chip ep">EP ${room.enemyPower}</span>`);
+  els.combatChips.innerHTML = chips.join("");
+
+  const acts = [];
+  if (room.canFight) acts.push(`<button type="button" data-cmd="fight">Fight</button>`);
+  if (room.canFlee)  acts.push(`<button type="button" data-cmd="flee">Flee</button>`);
+  if (room.canFire)  acts.push(`<button type="button" data-cmd="use fire">Fire</button>`);
+  els.combatActs.innerHTML = acts.join("");
+}
+
+function renderDesc(room) {
+  if (!room) {
+    els.descText.textContent = "Empty void. There is nothing here.";
+    els.descItems.innerHTML = "";
+    return;
+  }
+  els.descText.textContent = room.description || "(no description)";
+  if (room.items.length) {
+    els.descItems.innerHTML = room.items.map(it => {
+      const price = it.price != null ? ` <small style="color:var(--dim)">${it.price}c</small>` : "";
+      const req = it.requirements.length ? ` <small style="color:var(--dim)">[${it.requirements.join(", ")}]</small>` : "";
+      const verb = it.price != null ? "buy" : "take";
+      const label = it.price != null ? "Buy" : "Take";
+      return `<span class="chip item">${it.name} ×${it.count}${price}${req}<button type="button" data-cmd="${verb} ${it.name}">${label}</button></span>`;
+    }).join("");
+  } else {
+    els.descItems.innerHTML = "";
+  }
+}
+
+function renderDoors(doors) {
+  for (const dir of ["N", "E", "S", "W", "U", "D"]) {
+    const g = document.querySelector(`.btn[data-dir="${dir}"]`);
+    if (!g) continue;
+    const d = doors[dir];
+    if (!d || !d.present) {
+      g.dataset.present = "false";
+      continue;
+    }
+    g.dataset.present = "true";
+    let kind = "door";
+    if (d.locked) kind = "locked";
+    else if (dir === "U" || dir === "D") kind = "updown";
+    g.dataset.kind = kind;
+
+    const sub = g.querySelector("text.sub");
+    if (sub) {
+      if (d.locked && d.label) sub.textContent = d.label;
+      else if (d.teleport) sub.textContent = d.teleport;
+      else sub.textContent = "";
+    }
+  }
+}
+
+function render(state) {
+  renderStatus(state);
+  renderCombat(state.room);
+  renderDesc(state.room);
+  renderDoors(state.room?.doors || {});
+  renderTerrain(state.room?.terrain || "cave");
+  if (currentSession) currentSession._lastState = state;
+}
+
+// --------------------------------------------------------------- log
+
+function classify(line) {
+  const low = line.toLowerCase();
+  if (!line.trim()) return null;
+  if (line.includes("===") && line.includes("VICTORY")) return "title";
+  if (low.includes("victory") || low.includes("defeat the") || low.includes("you take")
+      || low.includes("you combine") || low.includes("you rest") || low.includes("you collect")
+      || low.includes("you buy") || low.includes("you hurl")) return "good";
+  if (low.includes("driven back") || low.includes("fail") || low.includes("need ")
+      || low.includes("collapse") || low.includes("cannot") || low.includes("unknown")
+      || low.includes("don't")) return "bad";
+  return null;
+}
+
+function appendLog(text, tag = null) {
+  const atBottom = els.log.scrollHeight - els.log.scrollTop - els.log.clientHeight < 24;
+  const p = document.createElement("p");
+  if (!text) { p.innerHTML = "&nbsp;"; }
+  else { if (tag) p.className = tag; p.textContent = text; }
+  els.log.appendChild(p);
+  while (els.log.children.length > 300) els.log.removeChild(els.log.firstChild);
+  if (atBottom) els.log.scrollTop = els.log.scrollHeight;
+}
+
+function clearLog() { els.log.innerHTML = ""; }
+
+// --------------------------------------------------------------- combine UI
+
+const combineSlots = { a: null, b: null };
+
+function renderCombineInv() {
+  if (!currentSession) return;
+  const inv = currentSession.player.inventory;
+  const keys = Object.keys(inv).sort();
+  if (!keys.length) {
+    els.combineInv.innerHTML = `<li class="empty">Inventory is empty.</li>`;
+  } else {
+    els.combineInv.innerHTML = keys.map(k =>
+      `<li class="inv-item" data-item="${k}">${k} <span class="count">×${inv[k]}</span></li>`
+    ).join("");
+  }
+  for (const slot of ["a", "b"]) {
+    const el = $(`slot-${slot}`);
+    const item = combineSlots[slot];
+    const itemEl = el.querySelector(".slot-item");
+    const hintEl = el.querySelector(".slot-hint");
+    if (item) {
+      itemEl.textContent = item;
+      itemEl.hidden = false;
+      hintEl.hidden = true;
+      el.dataset.filled = "";
+    } else {
+      itemEl.hidden = true;
+      hintEl.hidden = false;
+      delete el.dataset.filled;
+    }
+  }
+  els.combineGo.disabled = !(combineSlots.a && combineSlots.b);
+}
+
+function setSlot(slot, item) {
+  combineSlots[slot] = item;
+  renderCombineInv();
+}
+
+function clearSlots() {
+  combineSlots.a = null;
+  combineSlots.b = null;
+  renderCombineInv();
+}
+
+// --------------------------------------------------------------- map
+
+function renderMap(session) {
+  const p = session.player;
+  const dims = session.world.dimensions(p.map);
+  if (!dims.x) { els.mapSvg.innerHTML = ""; return; }
+  const cell = 60, gap = 8, pad = 20;
+  const totalW = pad * 2 + dims.x * cell + (dims.x - 1) * gap;
+  const totalH = pad * 2 + dims.y * cell + (dims.y - 1) * gap;
+  els.mapSvg.setAttribute("viewBox", `0 0 ${totalW} ${totalH}`);
+
+  const parts = [];
+  parts.push(`<g fill="#0e1218" stroke="#2a3440" stroke-width="1">`);
+  for (let y = 0; y < dims.y; y++)
+    for (let x = 0; x < dims.x; x++) {
+      const cx = pad + x * (cell + gap);
+      const cy = pad + (dims.y - 1 - y) * (cell + gap);
+      parts.push(`<rect x="${cx}" y="${cy}" width="${cell}" height="${cell}"/>`);
+    }
+  parts.push(`</g>`);
+
+  parts.push(`<g stroke="#7fb8e8" stroke-width="9">`);
+  for (let y = 0; y < dims.y; y++)
+    for (let x = 0; x < dims.x; x++) {
+      const room = session.world.getRoom(p.map, x, y, p.z);
+      if (!room) continue;
+      const doors = room.zones[0].doors;
+      const cx = pad + x * (cell + gap);
+      const cy = pad + (dims.y - 1 - y) * (cell + gap);
+      const cxE = cx + cell;
+      const cyN = cy;
+      const centerX = cx + cell / 2;
+      const centerY = cy + cell / 2;
+      if (doors.E) parts.push(`<line x1="${cxE}" y1="${centerY}" x2="${cxE + gap}" y2="${centerY}"/>`);
+      if (doors.N) parts.push(`<line x1="${centerX}" y1="${cyN}" x2="${centerX}" y2="${cyN - gap}"/>`);
+    }
+  parts.push(`</g>`);
+
+  const px = pad + p.x * (cell + gap) + cell / 2;
+  const py = pad + (dims.y - 1 - p.y) * (cell + gap) + cell / 2;
+  parts.push(`
+    <g>
+      <circle cx="${px}" cy="${py}" r="14" fill="var(--accent)" opacity="0.25">
+        <animate attributeName="r" values="14;22;14" dur="1.6s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="${px}" cy="${py}" r="8" fill="var(--accent)">
+        <animate attributeName="opacity" values="1;0.15;1" dur="1.6s" repeatCount="indefinite"/>
+      </circle>
+    </g>`);
+
+  els.mapSvg.innerHTML = parts.join("");
+  els.mapStatus.innerHTML = `<span>${p.map}, z = ${p.z}</span>` +
+    `<span class="sep">|</span><span class="goal">you are at ${p.x},${p.y}</span>`;
+}
+
+// ============================================================================
+// BOOT
+// ============================================================================
+
+const DEPTH = 2;
+const DUNGEONS = 7;
+
+let currentSession = null;
+
+function buildFullConfig({ name, width, height, seed }) {
+  const dw = width, dh = Math.max(4, Math.floor(height / 2));
+  const maps = [{
+    name: "overworld", kind: "overworld",
+    width, height, depth: DEPTH,
+    braid: 0.25, enemy_chance: 0.5,
+    resource_chance: 0.15,
+    description_set: "overworld",
+    start: [0, 0, 1],
+    features: {
+      loose_items: [{ name: "bomb", count: 3, floor: 1 }],
+      stair_pairs: 2,
+    },
+  }];
+  for (let i = 1; i <= DUNGEONS; i++) {
+    maps.push({
+      name: `level${i}`, kind: "dungeon",
+      width: dw, height: dh, depth: 1,
+      braid: 0.10,
+      enemy_density: i,
+      resource_chance: 0.25,
+      ore_count: 4,
+      bomb_walls: 2,
+      description_set: "dungeon",
+      crystal: true, boss: "dragon",
+    });
+  }
+  maps.push({
+    name: "level8", kind: "shrine",
+    width: dw, height: dh, depth: 1,
+    braid: 0.08,
+    enemy_density: 8,
+    resource_chance: 0.25,
+    ore_count: 4,
+    bomb_walls: 2,
+    description_set: "shrine",
+    boss: "dragon_red",
+    shrine: { requires: "crystal-7", victory_item: "victory" },
+  });
+  return {
+    name, seed, width, height, depth: DEPTH,
+    startMap: "overworld",
+    goal: {
+      name: "Collect the seven crystals",
+      item: "crystal", count: DUNGEONS,
+      victory_item: "victory",
+      victory_message:
+        "You place the seven crystals on the altar. The shrine fills with light, and the world is quiet again.",
+    },
+    respawn: { minutes: 5, chance: 0.2, no_respawn: ["dragon", "dragon_red"] },
+    combat: {
+      damage_per_fail: 1,
+      heart_item: "heart",
+      shelter_item: "shelter",
+      fire_item: "fire",
+      death: { coin_loss_fraction: 0.5, restore_hp: true },
+    },
+    maps,
+  };
+}
+
+function startGame(worldCfg) {
+  const config = buildFullConfig(worldCfg);
+  const t0 = performance.now();
+  const world = new World(config);
+  world.generate();
+  const t1 = performance.now();
+  console.log(`World generated in ${(t1 - t0).toFixed(0)} ms`);
+
+  // Try to restore progress if the world config matches.
+  let player = null;
+  let deltas = {};
+  let lastMoveDir = null;
+  try {
+    const raw = localStorage.getItem("pydventure.save");
+    if (raw) {
+      const saved = JSON.parse(raw);
+      const same = saved.world && saved.world.seed === config.seed
+                && saved.world.width === config.width
+                && saved.world.height === config.height
+                && saved.world.name === config.name;
+      if (same) {
+        player = Player.fromJSON(saved.player);
+        deltas = saved.deltas || {};
+        lastMoveDir = saved.lastMoveDir || null;
+        console.log("Restored saved game.");
+      }
+    }
+  } catch (e) { console.warn("Save load failed:", e); }
+
+  if (!player) {
+    player = new Player({ map: "overworld", x: 0, y: 0, z: 1 });
+  }
+
+  currentSession = new Session(world, player, { deltas, lastMoveDir });
+
+  clearLog();
+  appendLog(`Welcome to ${config.name}.`, "title");
+  if (player.won) appendLog("The world is quiet. You have already won.", "dim");
+  else appendLog("Click a door, or type a command. Try 'use search' or 'combine wood wood'.", "dim");
+  appendLog("");
+
+  render(stateFromSession(currentSession));
+  currentSession.save();
+}
+
+// ------------------------------------------------------------ welcome UI
+
+const STORAGE_KEY = "pydventure.world";
+const DEFAULTS = { name: "mygame", width: 8, height: 8, seed: "42" };
+
+const field = {
+  name:   $("w-name"),
+  width:  $("w-width"),
+  height: $("w-height"),
+  seed:   $("w-seed"),
+};
+const statusEl = $("w-status");
+
+function clampInt(v, lo, hi, fallback) {
+  const n = parseInt(v, 10);
+  if (Number.isNaN(n)) return fallback;
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function readForm() {
+  return {
+    name:   field.name.value.trim() || DEFAULTS.name,
+    width:  clampInt(field.width.value,  4, 32, DEFAULTS.width),
+    height: clampInt(field.height.value, 4, 32, DEFAULTS.height),
+    seed:   field.seed.value.trim() || DEFAULTS.seed,
+  };
+}
+
+function writeForm(w) {
+  field.name.value   = w.name;
+  field.width.value  = w.width;
+  field.height.value = w.height;
+  field.seed.value   = w.seed;
+}
+
+function loadWorldCfg() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveWorldCfg(w) { localStorage.setItem(STORAGE_KEY, JSON.stringify(w)); }
+
+const existing = loadWorldCfg();
+if (existing) {
+  statusEl.textContent = `Welcome back to ${existing.name} — ${existing.width}×${existing.height}, seed "${existing.seed}", depth ${DEPTH}.`;
+  writeForm(existing);
+} else {
+  statusEl.textContent = `No world found. Defaults shown: ${DEFAULTS.width}×${DEFAULTS.height}, seed "${DEFAULTS.seed}", depth ${DEPTH}.`;
+  writeForm(DEFAULTS);
+  saveWorldCfg(DEFAULTS);
+}
+
+$("w-regenerate").addEventListener("click", () => {
+  const w = readForm();
+  saveWorldCfg(w);
+  statusEl.textContent = `World "${w.name}" ready — ${w.width}×${w.height}, seed "${w.seed}", depth ${DEPTH}. Click Play.`;
+});
+
+$("w-play").addEventListener("click", () => {
+  const w = readForm();
+  saveWorldCfg(w);
+  try {
+    startGame(w);
+  } catch (e) {
+    console.error(e);
+    statusEl.textContent = `Generation failed: ${e.message}`;
+    statusEl.style.color = "var(--bad)";
+    return;
+  }
+  els.welcome.hidden = true;
+  els.welcome.style.display = "none"; // belt and braces against future CSS
+});
+
+// ------------------------------------------------------------ input & routing
+
+const history = [];
+let histIdx = 0;
+
+function submit(text) {
+  if (!currentSession) return;
+  const cmd = text.trim();
+  if (!cmd) return;
+  appendLog(`> ${cmd}`, "prompt");
+  history.push(cmd);
+  histIdx = history.length;
+  let result;
+  try {
+    result = currentSession.handleCommand(cmd);
+  } catch (e) {
+    console.error(e);
+    appendLog(`[internal error: ${e.message}]`, "bad");
+    return;
+  }
+  for (const line of result.lines) appendLog(line, classify(line));
+  if (result.endedReason === "victory" || result.endedReason === "quit") {
+    showEnded(result.endedReason);
+  }
+  render(stateFromSession(currentSession));
+  currentSession.save();
+}
+
+function showEnded(reason) {
+  const titles = { victory: "Victory", quit: "Saved" };
+  const bodies = {
+    victory: "The seven crystals are placed. The world is quiet.",
+    quit: "Close the tab whenever you're ready.",
+  };
+  els.endedTitle.textContent = titles[reason] ?? "Ended";
+  els.endedBody.textContent  = bodies[reason]  ?? "";
+  els.ended.hidden = false;
+}
+
+els.endedClose.addEventListener("click", () => { els.ended.hidden = true; });
+
+// ------------------------------------------------------------- click router
+
+document.addEventListener("click", e => {
+  const cmd = e.target.closest("[data-cmd]");
+  if (cmd) {
+    e.preventDefault();
+    submit(cmd.dataset.cmd);
+    return;
+  }
+  const open = e.target.closest("[data-open]");
+  if (open) {
+    e.preventDefault();
+    const id = open.dataset.open;
+    if (id === "ov-map" && currentSession) renderMap(currentSession);
+    if (id === "ov-combine") renderCombineInv();
+    $(id).hidden = false;
+    return;
+  }
+  const close = e.target.closest("[data-close]");
+  if (close) {
+    const ov = close.closest(".overlay");
+    if (ov) ov.hidden = true;
+    return;
+  }
+});
+
+// ------------------------------------------------------------- escape key
+
+document.addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  if (!els.ended.hidden) { els.ended.hidden = true; return; }
+  for (const ov of document.querySelectorAll(".overlay:not([hidden])")) {
+    if (ov === els.welcome) continue;
+    ov.hidden = true;
+  }
+});
+
+// ------------------------------------------------------------- map & combine
+
+$("dev-wipe")?.addEventListener("click", () => {
+  localStorage.removeItem("pydventure.save");
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+});
+
+$("dev-ended")?.addEventListener("click", () => { els.ended.hidden = false; });
+
+// Combine: click item → place in next free slot
+els.combineInv.addEventListener("click", e => {
+  const item = e.target.closest(".inv-item");
+  if (!item) return;
+  const name = item.dataset.item;
+  if (!combineSlots.a) setSlot("a", name);
+  else if (!combineSlots.b) setSlot("b", name);
+  else setSlot("a", name); // overwrite A if both filled
+});
+
+// Combine: drag/drop
+els.combineInv.addEventListener("dragstart", e => {
+  const item = e.target.closest(".inv-item");
+  if (!item) return;
+  e.dataTransfer.setData("text/plain", item.dataset.item);
+  e.dataTransfer.effectAllowed = "copy";
+});
+document.querySelectorAll(".inv-item").forEach(el => el.setAttribute("draggable", "true"));
+new MutationObserver(() => {
+  els.combineInv.querySelectorAll(".inv-item").forEach(el => el.setAttribute("draggable", "true"));
+}).observe(els.combineInv, { childList: true });
+
+for (const slotEl of [els.slotA, els.slotB]) {
+  slotEl.addEventListener("dragover", e => { e.preventDefault(); slotEl.classList.add("over"); });
+  slotEl.addEventListener("dragleave", () => slotEl.classList.remove("over"));
+  slotEl.addEventListener("drop", e => {
+    e.preventDefault();
+    slotEl.classList.remove("over");
+    const item = e.dataTransfer.getData("text/plain");
+    if (item) setSlot(slotEl.dataset.slot, item);
+  });
+  slotEl.addEventListener("click", () => {
+    setSlot(slotEl.dataset.slot, null);
+  });
+}
+
+els.combineGo.addEventListener("click", () => {
+  if (!combineSlots.a || !combineSlots.b) return;
+  const cmd = `combine ${combineSlots.a} ${combineSlots.b}`;
+  clearSlots();
+  els.combine.hidden = true;
+  submit(cmd);
+});
+
+// ============================================================================
+// Small dev nicety: keyboard shortcuts for door keys when nothing focused
+// ============================================================================
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  const map = { n: "move n", s: "move s", e: "move e", w: "move w", u: "move u", d: "move d" };
+  const cmd = map[e.key.toLowerCase()];
+  if (cmd && currentSession) { e.preventDefault(); submit(cmd); }
+});
+</script>
+</body>
+</html>
