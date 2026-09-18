@@ -129,14 +129,20 @@ class Level:
         if self.kind == "overworld":
             self._place_stairs()
             self._place_shops()
-            self._place_swords()
             self._place_loose_items()
             self._clear_start()
         elif self.kind == "dungeon":
             self._place_crystal()
         elif self.kind == "shrine":
             self._place_shrine()
+        self._place_resources()
+        self._place_ore()
         self._place_enemies()
+        # Bomb walls placed last so they don't disturb dead-end
+        # calculations used by swords / crystals / shrines. Opening a
+        # previously closed wall can only increase connectivity, so the
+        # maze stays traversable from the entrance.
+        self._place_bomb_walls()
 
     def _carve(self):
         for z in range(self.depth):
@@ -227,6 +233,64 @@ class Level:
             self.features.setdefault((x, y, z), []).append("item")
             self.items.setdefault((x, y, z), []).append(payload)
 
+    def _place_resources(self):
+        """Sprinkle terrain-appropriate materials across the map.
+
+        Overworld yields rock and wood. Dungeons yield ore and coal.
+        """
+        chance = self.cfg.get("resource_chance", 0.0)
+        if chance <= 0:
+            return
+        table = self.world.get("terrain_resources", {})
+        if not table:
+            return
+        for z in range(self.depth):
+            for y in range(self.height):
+                for x in range(self.width):
+                    if (x, y, z) in self.items or (x, y, z) in self.features:
+                        continue
+                    if self.rng.random() >= chance:
+                        continue
+                    pool = table.get(self.terrains.get((x, y, z)), [])
+                    if not pool:
+                        continue
+                    name = weighted_choice(self.rng, pool)
+                    self.items[(x, y, z)] = [name]
+
+    def _place_bomb_walls(self):
+        """Open N currently closed interior walls and gate them on both
+        sides with a `bomb-1` requirement. The runtime unlocks both sides
+        the first time a bomb is spent, so the wall is one-way expensive
+        and two-way free."""
+        count = self.cfg.get("bomb_walls", 0)
+        if count <= 0:
+            return
+        for z in range(self.depth):
+            m = self.floors[z]
+            placed = 0
+            attempts = 0
+            while placed < count and attempts < 200:
+                attempts += 1
+                x = self.rng.randrange(self.width)
+                y = self.rng.randrange(self.height)
+                walled = [d for d in "NESW"
+                          if m.walls[(x, y)][d]
+                          and m.in_bounds(x + DELTA[d][0], y + DELTA[d][1])]
+                if not walled:
+                    continue
+                d = self.rng.choice(walled)
+                dx, dy = DELTA[d]
+                nx, ny = x + dx, y + dy
+                back = OPPOSITE[d]
+                if (x, y, z, d) in self.door_reqs:
+                    continue
+                if (nx, ny, z, back) in self.door_reqs:
+                    continue
+                m.open_wall(x, y, d)
+                self.door_reqs[(x, y, z, d)] = "bomb-1"
+                self.door_reqs[(nx, ny, z, back)] = "bomb-1"
+                placed += 1
+
     def _far_dead_end(self, z=0, avoid=(0, 0)):
         m = self.floors[z]
         dist = bfs_distances(m, avoid)
@@ -273,17 +337,54 @@ class Level:
             self.enemies[(sx, sy, 0)] = [self.cfg["boss"]]
 
     def _place_enemies(self):
-        chance = self.cfg.get("enemy_chance", 0.5)
+        density = self.cfg.get("enemy_density")
+        chance  = self.cfg.get("enemy_chance")
         for z in range(self.depth):
             for y in range(self.height):
                 for x in range(self.width):
-                    if (x, y, z) in self.enemies: continue
-                    if self.rng.random() >= chance: continue
+                    if (x, y, z) in self.enemies:
+                        continue
                     tname = self.terrains.get((x, y, z))
-                    if tname is None: continue
+                    if tname is None:
+                        continue
                     pool = self.world["terrains"].get(tname, {}).get("enemies", [])
-                    if pool:
+                    if not pool:
+                        continue
+                    if density is not None:
+                        # Triangular distribution: mean = density,
+                        # peak at density, range 0..2*density.
+                        count = (self.rng.randint(0, density)
+                                 + self.rng.randint(0, density))
+                        if count <= 0:
+                            continue
+                        self.enemies[(x, y, z)] = [
+                            self.rng.choice(pool) for _ in range(count)
+                        ]
+                    elif chance is not None:
+                        if self.rng.random() >= chance:
+                            continue
                         self.enemies[(x, y, z)] = [self.rng.choice(pool)]
+
+    def _place_ore(self):
+        """Place exactly ore_count ore cells. Runs after _place_resources
+        so it can't overwrite coal or items, and after _place_crystal so
+        the crystal cell is already marked. Enemies may still land on the
+        ore cell via _place_enemies (called later) -- a guarded ore is a
+        feature, not a bug."""
+        count = self.cfg.get("ore_count", 0)
+        if count <= 0:
+            return
+        for z in range(self.depth):
+            placed = 0
+            attempts = 0
+            while placed < count and attempts < 500:
+                attempts += 1
+                x = self.rng.randrange(self.width)
+                y = self.rng.randrange(self.height)
+                if (x, y, z) in self.items or (x, y, z) in self.features:
+                    continue
+                self.items[(x, y, z)] = ["ore"]
+                placed += 1
 
     def _clear_start(self):
         sx, sy, sz = self.cfg.get("start", [0, 0, 0])

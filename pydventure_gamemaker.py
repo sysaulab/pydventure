@@ -34,24 +34,29 @@ ENEMIES = {
 }
 
 DROPS = {
-    "octorok_blue": {"coins": [0, 1]},
-    "bat_blue":     {"coins": [0, 2]},
-    "spider_blue":  {"coins": [0, 3]},
-    "fan":          {"coins": [1, 4]},
-    "rhinos":       {"coins": [1, 5]},
-    "knight_blue":  {"coins": [2, 6]},
-    "octorok_red":  {"coins": [3, 6]},
-    "bat_red":      {"coins": [3, 7]},
-    "spider_red":   {"coins": [4, 8]},
-    "fan_red":      {"coins": [4, 9],  "bombs": [0, 1]},
-    "rhinos_red":   {"coins": [5, 10], "bombs": [0, 1]},
-    "knight_red":   {"coins": [6, 12], "bombs": [0, 1]},
-    "ghosts":       {"coins": [5, 10], "bombs": [0, 1]},
-    "stalfos":      {"coins": [8, 14],  "bombs": [0, 1]},
-    "darknut":      {"coins": [10, 18], "bombs": [0, 2]},
-    "wizzrobe":     {"coins": [12, 22], "bombs": [1, 2]},
-    "dragon":       {"coins": [20, 35], "bombs": [2, 3], "heart": 1},
-    "dragon_red":   {"coins": [25, 50], "bombs": [3, 5], "heart": 1},
+    # overworld blue tier — mostly wood, occasional rock
+    "octorok_blue": {"items": {"wood": [0, 2]}},
+    "bat_blue":     {"items": {"wood": [0, 1]}},
+    "spider_blue":  {"items": {"wood": [1, 2]}},
+    "fan":          {"items": {"wood": [1, 2]}},
+    "rhinos":       {"items": {"wood": [1, 3], "rock": [0, 1]}},
+    "knight_blue":  {"items": {"wood": [1, 2], "rock": [0, 1]}},
+    # overworld red tier — more wood, more rock
+    "octorok_red":  {"items": {"wood": [1, 2], "rock": [0, 1]}},
+    "bat_red":      {"items": {"wood": [1, 2]}},
+    "spider_red":   {"items": {"wood": [1, 3], "rock": [0, 1]}},
+    "fan_red":      {"items": {"wood": [2, 3], "rock": [0, 1], "bomb": [0, 1]}},
+    "rhinos_red":   {"items": {"wood": [2, 3], "rock": [1, 2], "bomb": [0, 1]}},
+    "knight_red":   {"items": {"wood": [1, 3], "rock": [1, 2], "bomb": [0, 1]}},
+    "ghosts":       {"items": {"wood": [1, 2], "rock": [1, 2], "bomb": [0, 1]}},
+    # dungeon tier — wood-heavy, rock moderate, bombs for the walls
+    "stalfos":      {"items": {"wood": [1, 3], "rock": [0, 2], "bomb": [0, 1]}},
+    "darknut":      {"items": {"wood": [2, 3], "rock": [1, 2], "bomb": [0, 2]}},
+    "wizzrobe":     {"items": {"wood": [2, 4], "rock": [1, 3], "bomb": [1, 2]}},
+    "dragon":       {"items": {"wood": [3, 5], "rock": [2, 3],
+                               "bomb": [2, 3], "heart": [1, 1]}},
+    "dragon_red":   {"items": {"wood": [4, 6], "rock": [3, 5],
+                               "bomb": [3, 5], "heart": [1, 1]}},
 }
 
 ITEMS = {
@@ -63,6 +68,16 @@ ITEMS = {
     "heart":       {"name": "Heart",       "type": "consumable", "description": "A glass heart, warm to hold."},
     "crystal":     {"name": "Crystal",     "type": "quest",      "description": "A shard of light, humming faintly."},
     "victory":     {"name": "Heart of the World", "type": "quest", "description": "The shrine's gift. Warm to the touch."},
+    # crafting materials and tools
+    "rock":        {"name": "Rock",        "type": "material",   "description": "A chunk of hard stone."},
+    "wood":        {"name": "Wood",        "type": "material",   "description": "A length of dry branch."},
+    "ore":         {"name": "Ore",         "type": "material",   "description": "Raw metal, still dark with earth."},
+    "fire":        {"name": "Fire",        "type": "consumable", "description": "A small, sustained flame. Use to scatter enemies."},
+    "coal":        {"name": "Coal",        "type": "material",   "description": "A black, hot-burning lump."},
+    "steel":       {"name": "Steel",       "type": "material",   "description": "A bar of worked metal."},
+    "blunt_knife": {"name": "Blunt Knife", "type": "tool",       "description": "A rough blade struck from stone."},
+    "plank":       {"name": "Plank",       "type": "material",   "description": "A length of split timber."},
+    "shelter":     {"name": "Shelter",     "type": "consumable", "description": "A lean-to and a small fire. Use to rest."},
 }
 
 SKILLS = {
@@ -70,6 +85,18 @@ SKILLS = {
     "avoidance": {"name": "Avoidance", "description": "Skill at slipping past enemies."},
     "search":    {"name": "Searching", "description": "An eye for hidden things."},
 }
+
+# Crafting recipes. Inputs are consumed entirely; there is no 'keep' rule.
+# Duplicate input signatures are disallowed at load time by the runtime.
+RECIPES = [
+    {"inputs": {"wood": 2},                    "output": {"item": "fire"}},
+    {"inputs": {"rock": 2},                    "output": {"item": "blunt_knife"}},
+    {"inputs": {"blunt_knife": 1, "wood": 1},  "output": {"item": "plank"}},
+    {"inputs": {"plank": 2},                   "output": {"item": "shelter"}},
+    {"inputs": {"fire": 1, "wood": 1},         "output": {"item": "coal"}},
+    {"inputs": {"coal": 1, "ore": 1},          "output": {"item": "steel"}},
+    {"inputs": {"blunt_knife": 1, "steel": 1}, "output": {"item": "sword"}},
+]
 
 TERRAINS = {
     # overworld surface
@@ -112,6 +139,28 @@ TERRAINS = {
     "shrine_hall": {"kind": "shrine", "floors": [0], "weight": 1,
                     "description": "a vast hall of black stone",
                     "enemies": ["wizzrobe", "darknut"]},
+}
+
+# Terrain-driven resource placement. Each entry is a weighted pool:
+#   [["name", weight], ...]
+# Overworld sprinkles rock and wood only. Ore is dungeon-exclusive.
+# Coal can also be crafted from fire+wood on the surface.
+TERRAIN_RESOURCES = {
+    # overworld: rock and wood only
+    "plains":     [["rock", 1], ["wood", 1]],
+    "forest":     [["wood", 4], ["rock", 1]],
+    "dead_plain": [["rock", 3], ["wood", 1]],
+    "cemetery":   [["rock", 2]],
+    "valley":     [["rock", 3], ["wood", 1]],
+    "cave":       [["rock", 2], ["wood", 1]],
+    # dungeons: ore and coal
+    "stone_hall": [["ore", 3], ["coal", 2]],
+    "crypt":      [["ore", 2], ["coal", 3]],
+    "armory":     [["ore", 4], ["coal", 2]],
+    "library":    [["coal", 4], ["ore", 1]],
+    "sanctum":    [["ore", 3], ["coal", 3]],
+    # shrine
+    "shrine_hall":[["ore", 2], ["coal", 2]],
 }
 
 DESCRIPTION_SETS = {
@@ -165,13 +214,13 @@ def build_world(seed, ow_w=8, ow_h=8, ow_d=2, dungeons=7):
         "name": "overworld", "kind": "overworld",
         "width": ow_w, "height": ow_h, "depth": ow_d,
         "braid": 0.25, "enemy_chance": 0.5,
+        "resource_chance": 0.15,
         "description_set": "overworld",
         "start": [0, 0, 1],
         "features": {
-            "swords": {"count": 3, "floors": [1, 0],
-                       "guarded_by": ["knight_red", "bat_red"]},
-            "shops": [{"floor": 0,
-                       "items": ["shield@100", "key@100", "candle_blue@60"]}],
+            # Shops removed — coins and stores are engine-supported
+            # but unused in this game. The seven crystals are the goal;
+            # materials come from terrain sprinkles and enemy drops.
             "loose_items": [{"name": "bomb", "count": 3, "floor": 1}],
             "stair_pairs": 2,
         },
@@ -180,14 +229,22 @@ def build_world(seed, ow_w=8, ow_h=8, ow_d=2, dungeons=7):
         maps.append({
             "name": f"level{i}", "kind": "dungeon",
             "width": dw, "height": dh, "depth": 1,
-            "braid": 0.10, "enemy_chance": 0.85,
+            "braid": 0.10,
+            "enemy_density": i,          # level 1 → 1/room, level 7 → 7/room
+            "resource_chance": 0.25,
+            "ore_count": 1,              # exactly 4 ore on the floor
+            "bomb_walls": 2,
             "description_set": "dungeon",
             "crystal": True, "boss": "dragon",
         })
     maps.append({
         "name": "level8", "kind": "shrine",
         "width": dw, "height": dh, "depth": 1,
-        "braid": 0.08, "enemy_chance": 0.9,
+        "braid": 0.08,
+        "enemy_density": 8,
+        "resource_chance": 0.25,
+        "ore_count": 4,
+        "bomb_walls": 2,
         "description_set": "shrine",
         "boss": "dragon_red",
         "shrine": {"requires": "crystal-7", "victory_item": "victory"},
@@ -209,12 +266,15 @@ def build_world(seed, ow_w=8, ow_h=8, ow_d=2, dungeons=7):
         "combat": {
             "damage_per_fail": 1,
             "heart_item": "heart",
+            "shelter_item": "shelter",
+            "fire_item": "fire",
             "death": {
                 "coin_loss_fraction": 0.5,
                 "restore_hp": True,
             },
         },
         "terrains": TERRAINS,
+        "terrain_resources": TERRAIN_RESOURCES,
         "description_sets": DESCRIPTION_SETS,
         "feature_phrases": FEATURE_PHRASES,
         "maps": maps,
@@ -256,8 +316,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("target")
     ap.add_argument("--seed", default="0")
-    ap.add_argument("--width", type=int, default=8)
-    ap.add_argument("--height", type=int, default=8)
+    ap.add_argument("--width", type=int, default=10)
+    ap.add_argument("--height", type=int, default=10)
     ap.add_argument("--depth", type=int, default=2)
     ap.add_argument("--dungeons", type=int, default=7)
     ap.add_argument("--force", action="store_true")
@@ -271,6 +331,8 @@ def main():
     write_json(os.path.join(args.target, "drops.json"),   DROPS,   args.force)
     write_json(os.path.join(args.target, "items.json"),   ITEMS,   args.force)
     write_json(os.path.join(args.target, "skills.json"),  SKILLS,  args.force)
+    write_json(os.path.join(args.target, "recipes.json"),
+               {"recipes": RECIPES}, args.force)
 
     world = build_world(args.seed, args.width, args.height, args.depth, args.dungeons)
     write_json(os.path.join(args.target, "world.json"), world, args.force)

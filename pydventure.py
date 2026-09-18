@@ -7,8 +7,9 @@ Game name derived from the containing folder.
 Usage:
     python pydventure.py [--tui] [game_directory]
 
-Tables (enemies.json, drops.json, items.json, skills.json, maps.json) are
-loaded from the game directory. Run pydventure_gamemaker.py to create them.
+Tables (enemies.json, drops.json, items.json, skills.json, maps.json,
+recipes.json) are loaded from the game directory. Run
+pydventure_gamemaker.py to create them.
 """
 
 import json
@@ -487,14 +488,27 @@ class RoomState:
         return total
 
     def _roll_drops(self, enemies):
-        coins = bombs = hearts = 0
+        """Roll drops for a defeated enemy group. Returns a dict of
+        {item_name: count} containing everything that fell.
+
+        The drop table for each enemy is a dict whose "items" key maps
+        item names to either an int (fixed count) or a [min, max] pair
+        (inclusive random roll). Zero rolls are elided.
+
+            {"items": {"wood": [0, 2], "rock": [1, 1]}}
+        """
+        totals = {}
         for name, count in enemies:
             drop = self.drops_func(name) or {}
+            items = drop.get("items", {})
+            if not items:
+                continue
             for _ in range(count):
-                coins  += _roll(drop.get("coins", 0))
-                bombs  += _roll(drop.get("bombs", 0))
-                hearts += _roll(drop.get("heart", 0))
-        return coins, bombs, hearts
+                for iname, irange in items.items():
+                    n = _roll(irange)
+                    if n:
+                        totals[iname] = totals.get(iname, 0) + n
+        return totals
 
     def fight_enemies(self):
         enemies = self.current_enemies()
@@ -511,25 +525,17 @@ class RoomState:
                     f"You are driven back! (-{dmg} HP) "
                     f"(you {roll} vs them {enemy_roll}; FP {pool} vs EP {ep})")
         self.player.increase_skill('fight')
-        coins, bombs, hearts = self._roll_drops(enemies)
-        self.player.coins += coins
-        if bombs:
-            self.player.add_item("bomb", bombs)
-        if hearts:
-            self.player.add_item(self.combat["heart_item"], hearts)
+        loot = self._roll_drops(enemies)
         self.zone_cleared[self.current_zone] = True
         self.room.zones[self.current_zone].enemies = []
         msg = (f"You defeat the enemies! "
                f"(you {roll} vs them {enemy_roll}; FP {pool} vs EP {ep})")
-        loot = []
-        if coins:
-            loot.append(f"{coins} coin{'s' if coins != 1 else ''}")
-        if bombs:
-            loot.append(f"{bombs} bomb{'s' if bombs != 1 else ''}")
-        if hearts:
-            loot.append(f"{hearts} heart{'s' if hearts != 1 else ''}")
         if loot:
-            msg += " You collect " + " and ".join(loot) + "."
+            parts = []
+            for iname, n in sorted(loot.items()):
+                self.player.grant(iname, n)
+                parts.append(iname if n == 1 else f"{iname} x{n}")
+            msg += " You collect " + ", ".join(parts) + "."
         return (True, msg)
 
     def avoid_enemies(self):
@@ -551,6 +557,19 @@ class RoomState:
                 f"You slip past the enemies! "
                 f"(you {roll} vs them {enemy_roll}; AP {pool} vs EP {ep})")
 
+    def clear_with_fire(self):
+        """Burn out the current zone. Guaranteed, silent, no drops.
+        Enemies scatter; they do not die, so nothing falls."""
+        enemies = self.current_enemies()
+        if not enemies:
+            return (False, "No enemies here.")
+        self.zone_cleared[self.current_zone] = True
+        self.room.zones[self.current_zone].enemies = []
+        self.player.increase_skill('avoidance')
+        return (True,
+                "You hurl the fire. It flares, and the enemies scatter "
+                "into the dark. You slip through unseen. (avoidance +1)")
+    
     def current_items(self):
         return [item for item in self.room.zones[self.current_zone].items if self.is_item_visible(item.name)]
 
@@ -623,6 +642,7 @@ class GameMap:
         self.enemy_db = self._load_enemy_db()
         self.drops_db = self._load_drops()
         self.maps_db = self._load_maps_db()
+        self.recipes = self._load_recipes()
         self.combat = self.maps_db["combat"]
         self.death_cfg = self.combat["death"]
 
@@ -650,6 +670,24 @@ class GameMap:
     def _load_maps_db(self):
         with open(self._require("maps.json")) as f:
             return json.load(f)
+
+    def _load_recipes(self):
+        with open(self._require("recipes.json")) as f:
+            recipes = json.load(f)["recipes"]
+        seen = set()
+        for r in recipes:
+            sig = tuple(sorted(r["inputs"].items()))
+            if sig in seen:
+                raise ValueError(f"Duplicate recipe signature in recipes.json: {r['inputs']}")
+            seen.add(sig)
+        return recipes
+
+    def find_recipe(self, inputs: dict):
+        sig = tuple(sorted(inputs.items()))
+        for r in self.recipes:
+            if tuple(sorted(r["inputs"].items())) == sig:
+                return r
+        return None
 
     def difficulty(self, enemy_name):
         entry = self.enemy_db.get(enemy_name, {})
@@ -797,6 +835,64 @@ class GameSession:
                 return idx
         return 0
 
+    def _neighbor_coords(self, direction):
+        """Coords of the cell one step in `direction` from the player."""
+        dx = dy = dz = 0
+        if direction == 'N': dy = 1
+        elif direction == 'S': dy = -1
+        elif direction == 'E': dx = 1
+        elif direction == 'W': dx = -1
+        elif direction == 'U': dz = 1
+        elif direction == 'D': dz = -1
+        else:
+            return (None, None, None)
+        return (self.player.x + dx, self.player.y + dy, self.player.z + dz)
+
+    def _unlock_neighbor(self, map_name, x, y, z, direction, req_name):
+        """Remove a matching pass requirement from the neighbor's state
+        (or pristine room, which we then write as a state file) so that a
+        consumed door — bomb wall, locked door — is open from both sides
+        the first time it's opened. Called after a consumable requirement
+        has been spent in the current room."""
+        state_path = self.map._room_filename(map_name, x, y, z, True)
+        pristine_path = self.map._room_filename(map_name, x, y, z, False)
+        path = state_path if os.path.exists(state_path) else pristine_path
+        if not os.path.exists(path):
+            return
+        room = self.map._load_room_from_file(path)
+        changed = False
+        for zone in room.zones:
+            di = zone.doors.get(direction)
+            if di and di.pass_reqs and di.pass_reqs[0].name == req_name:
+                di.pass_reqs.pop(0)
+                changed = True
+                break
+        if changed:
+            self.map.save_room_state(map_name, x, y, z, room)
+
+    def _open_door_with_item(self, direction, item_name):
+        """Use an item on a door in the current room, mirroring the
+        unlock to the neighbor when the requirement is consumable."""
+        rs = self.player.current_room
+        if rs is None:
+            return (False, "No room.")
+        di = rs.current_doors().get(direction)
+        if di is None:
+            return (False, f"No door {direction}.")
+        if not (di.pass_reqs and di.pass_reqs[0].name == item_name):
+            return (False, f"{direction} door doesn't need {item_name}.")
+        req = di.pass_reqs[0]
+        consumed = req.is_consumable
+        if not rs.use_door(direction):
+            return (False, "Cannot use that.")
+        if consumed:
+            nx, ny, nz = self._neighbor_coords(direction)
+            if nx is not None:
+                self._unlock_neighbor(
+                    self.player.map_name, nx, ny, nz,
+                    OPPOSITE[direction], req.name)
+        return (True, f"Used {item_name} on {direction} door.")
+
     def _enemy_block(self, emit=None):
         emit = emit or print
         if self.player.current_room is None:
@@ -823,6 +919,14 @@ class GameSession:
             if di is None: return (False, "No door there.")
             if di.pass_reqs: return (False, f"You need {di.pass_reqs[0].name}.")
             return (False, "Cannot go that way.")
+
+        # Capture the consumable requirement (if any) we are about to spend,
+        # so we can mirror the unlock to the neighbor after use.
+        di_pre = rs.current_doors().get(direction)
+        consumed_req = None
+        if di_pre and di_pre.pass_reqs and di_pre.pass_reqs[0].is_consumable:
+            consumed_req = di_pre.pass_reqs[0].name
+
         if not rs.use_door(direction): return (False, "Failed to use door.")
         di = rs.current_doors().get(direction)
         old_map, old_x, old_y, old_z = self.player.map_name, self.player.x, self.player.y, self.player.z
@@ -853,6 +957,9 @@ class GameSession:
             if not (0 <= new_x < dims['x_size'] and 0 <= new_y < dims['y_size'] and 0 <= new_z < dims['z_size']):
                 return (False, "Out of world.")
             self.map.save_room_state(old_map, old_x, old_y, old_z, rs.room)
+            if consumed_req:
+                self._unlock_neighbor(old_map, new_x, new_y, new_z,
+                                      OPPOSITE[direction], consumed_req)
             self.player.x, self.player.y, self.player.z = new_x, new_y, new_z
             self.player.zone = 0
             self.load_current_room()
@@ -880,9 +987,28 @@ class GameSession:
             self.player.x, self.player.y, self.player.z = 0, 0, 0
         self.player.zone = 0
         self.load_current_room()
-        
+
     def use_item(self, item_name, direction=None):
-        heart_item = self.map.combat["heart_item"]
+        heart_item   = self.map.combat["heart_item"]
+        shelter_item = self.map.combat.get("shelter_item", "shelter")
+        fire_item    = self.map.combat.get("fire_item", "fire")
+        if item_name == fire_item:
+            if direction:
+                return (False, "Fire doesn't take a direction.")
+            if not self.player.has_item(fire_item):
+                return (False, f"You have no {fire_item}.")
+            if self.player.current_room is None:
+                return (False, "No room.")
+            ok, msg = self.player.current_room.clear_with_fire()
+            if ok:
+                self.player.remove_item(fire_item, 1)
+            return (ok, msg)
+        if item_name == shelter_item:
+            if not self.player.has_item(shelter_item):
+                return (False, f"You have no {shelter_item}.")
+            self.player.remove_item(shelter_item, 1)
+            self.player.heal_full()
+            return (True, "You rest by the fire and recover your strength.")
         if item_name == heart_item:
             if not self.player.has_item(heart_item):
                 return (False, f"You have no {heart_item}.")
@@ -890,7 +1016,7 @@ class GameSession:
             self.player.max_hp += 1
             self.player.hp = min(self.player.hp + 1, self.player.max_hp)
             return (True, f"Your maximum HP rises to {self.player.max_hp}.")
-        if not self.player.current_room: 
+        if not self.player.current_room:
             return (False, "No room.")
         rs = self.player.current_room
         if item_name in SKILL_NAMES:
@@ -901,20 +1027,16 @@ class GameSession:
                 else: return rs.search_zone()
             else: return (False, "Unknown skill.")
         if direction:
-            di = rs.current_doors().get(direction)
-            if di is None: return (False, f"No door {direction}.")
-            if di.pass_reqs and di.pass_reqs[0].name == item_name:
-                if rs.use_door(direction): return (True, f"Used {item_name} on {direction} door.")
-                return (False, "Cannot use that.")
-            return (False, f"{direction} door doesn't need {item_name}.")
+            return self._open_door_with_item(direction, item_name)
         else:
             candidates = []
             for d, di in rs.current_doors().items():
-                if di.pass_reqs and di.pass_reqs[0].name == item_name: candidates.append(d)
+                if di.pass_reqs and di.pass_reqs[0].name == item_name:
+                    candidates.append(d)
             if not candidates: return (False, f"No door requires {item_name}.")
-            if len(candidates) > 1: return (False, f"Multiple doors require {item_name}; specify direction.")
-            if rs.use_door(candidates[0]): return (True, f"Used {item_name} on {candidates[0]} door.")
-            return (False, "Failed.")
+            if len(candidates) > 1:
+                return (False, f"Multiple doors require {item_name}; specify direction.")
+            return self._open_door_with_item(candidates[0], item_name)
 
     def take_item(self, item_name):
         if not self.player.current_room: return (False, "No room.")
@@ -923,6 +1045,28 @@ class GameSession:
     def buy_item(self, item_name):
         if not self.player.current_room: return (False, "No room.")
         return self.player.current_room.buy_item(item_name)
+
+    def combine(self, inputs):
+        """Consume inputs and grant the recipe's output. Inputs are a dict
+        of {item_name: count}. Order does not matter; the recipe table is
+        keyed on the sorted signature of the input set."""
+        pretty = " + ".join(
+            f"{n} x{c}" if c > 1 else n for n, c in sorted(inputs.items())
+        )
+        recipe = self.map.find_recipe(inputs)
+        if recipe is None:
+            return (False, f"You don't know how to combine {pretty}.")
+        for name, count in inputs.items():
+            if not self.player.has_item(name, count):
+                return (False, f"You need {count} {name}.")
+        for name, count in inputs.items():
+            self.player.remove_item(name, count)
+        out = recipe["output"]
+        out_count = out.get("count", 1)
+        self.player.grant(out["item"], out_count)
+        if out_count > 1:
+            return (True, f"You combine {pretty} into {out['item']} x{out_count}.")
+        return (True, f"You combine {pretty} into {out['item']}.")
 
     def reset_game(self, emit=None):
         emit = emit or print
@@ -1008,14 +1152,24 @@ class GameSession:
         action = parts[0]
 
         heart_item = self.map.combat["heart_item"]
+        shelter_item = self.map.combat.get("shelter_item", "shelter")
+
+        heart_item   = self.map.combat["heart_item"]
+        shelter_item = self.map.combat.get("shelter_item", "shelter")
+        fire_item    = self.map.combat.get("fire_item", "fire")
 
         is_fight = action == 'fight' or (
             action == 'use' and len(parts) >= 2 and parts[1] == 'fight')
         is_flee = action in ('flee', 'avoid') or (
             action == 'use' and len(parts) >= 2
             and parts[1] in ('avoidance', 'flee', 'avoid'))
-        is_heal = action == 'use' and len(parts) >= 2 and parts[1] == heart_item
-        is_meta = action in ('save', 'quit', 'exit', 'reset', 'retreat') or is_heal
+        is_heal = action == 'use' and len(parts) >= 2 and parts[1] in (heart_item, shelter_item)
+        is_fire = action == 'use' and len(parts) >= 2 and parts[1] == fire_item
+        # Actions that must run *before* the enemy-block preamble. Fire
+        # belongs here: it resolves the enemies itself, and it must not
+        # cost an avoid roll to reach.
+        is_meta = (action in ('save', 'quit', 'exit', 'reset', 'retreat')
+                   or is_heal or is_fire)
 
         if not (is_fight or is_flee or is_meta):
             if not self._enemy_block(emit=emit):
@@ -1050,6 +1204,15 @@ class GameSession:
             item = parts[1]
             direction = parts[2].upper() if len(parts) >= 3 else None
             _, msg = self.use_item(item, direction)
+            emit(msg)
+        elif action == 'combine' or action == 'craft' or action == 'make':
+            if len(parts) < 2:
+                emit("Combine what? e.g. 'combine rock rock'")
+                return finish()
+            inputs = {}
+            for name in parts[1:]:
+                inputs[name] = inputs.get(name, 0) + 1
+            _, msg = self.combine(inputs)
             emit(msg)
         elif action == 'fight':
             _, msg = self.use_item('fight')
@@ -1100,13 +1263,14 @@ class GameSession:
         else:
             emit("Unknown command.")
         return finish()
-    
+
     # ------------------------------------------------------------- plain loop
 
     def run(self):
         print(f"=== {PROGRAM_NAME} - {self.game_name} ===")
         print("Commands: move <N/E/S/W/U/D>, retreat, use <item/skill> [direction], "
-              "take <item>, buy <item>, enter <zone>, fight, flee, save, reset, quit")
+              "take <item>, buy <item>, combine <item> <item> [...], "
+              "enter <zone>, fight, flee, save, reset, quit")
         while True:
             print("\n" + self.describe_room())
             try:

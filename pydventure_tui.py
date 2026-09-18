@@ -156,9 +156,9 @@ def room_lines(session, width):
 
 def status_line(session):
     p = session.player
-    parts = [f"{session.game_name}"]
-    parts.append(f"({p.x},{p.y},{p.z})")
-    parts.append(f"coins {p.coins}")
+    parts = [f"{p.map_name}:{p.x},{p.y},{p.z}"]
+    if p.coins:
+        parts.append(f"coins {p.coins}")
     parts.append(f"sword {p.sword_level}")
     goal = session.map.goal()
     if goal and goal.get("count"):
@@ -168,10 +168,14 @@ def status_line(session):
     parts.append(f"hp {p.hp}/{p.max_hp}")
     skills = p.skills
     parts.append("skills " + "/".join(f"{k[0]}{v}" for k, v in skills.items()))
-    inv = p.inventory
-    if inv:
-        parts.append("inv " + " ".join(f"{k}:{v}" for k, v in inv.items()))
     return "  |  ".join(parts)
+
+
+def inventory_line(session):
+    inv = session.player.inventory
+    if not inv:
+        return "inv  (empty)"
+    return "inv  " + "  ".join(f"{k}:{v}" for k, v in inv.items())
 
 
 def log_lines(log, width):
@@ -212,6 +216,14 @@ class TUI:
         except curses.error:
             pass
 
+        # Row 1: inventory (own row so a long inventory never truncates
+        # the status bar's hp / coins / quest counter)
+        inv = inventory_line(self.session)[: w - 1]
+        try:
+            stdscr.addstr(1, 0, inv.ljust(w - 1), attr(C_STATUS))
+        except curses.error:
+            pass
+
         sep = "─" * (w - 1)
 
         # Reserve log rows based on terminal size. The log gets as many
@@ -225,7 +237,7 @@ class TUI:
         log_end   = h - 3             # last row used by the log
         log_start = log_end - log_rows + 1
         mid_sep   = log_start - 1
-        room_start = 2
+        room_start = 3                # was 2 — make room for the inventory row
         room_end   = mid_sep - 1
 
         # --- room pane
@@ -343,7 +355,8 @@ class TUI:
         stdscr.keypad(True)
 
         self.log.append(f"Welcome to {self.session.game_name}.")
-        self.log.append("Try: move n, search, fight, take crystal, save, quit")
+        self.log.append("Try: move n, search, fight, take crystal, "
+                        "combine rock rock, use shelter, save, quit")
 
         while True:
             self.draw(stdscr)
