@@ -154,13 +154,13 @@ TERRAIN_RESOURCES = {
     "valley":     [["rock", 3], ["wood", 1]],
     "cave":       [["rock", 2], ["wood", 1]],
     # dungeons: ore and coal
-    "stone_hall": [["ore", 3], ["coal", 2]],
-    "crypt":      [["ore", 2], ["coal", 3]],
-    "armory":     [["ore", 4], ["coal", 2]],
-    "library":    [["coal", 4], ["ore", 1]],
-    "sanctum":    [["ore", 3], ["coal", 3]],
+    "stone_hall": [["ore", 0], ["coal", 2]],
+    "crypt":      [["ore", 0], ["coal", 3]],
+    "armory":     [["ore", 0], ["coal", 2]],
+    "library":    [["coal", 4], ["ore", 0]],
+    "sanctum":    [["ore", 0], ["coal", 3]],
     # shrine
-    "shrine_hall":[["ore", 2], ["coal", 2]],
+    "shrine_hall":[["ore", 0], ["coal", 2]],
 }
 
 DESCRIPTION_SETS = {

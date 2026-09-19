@@ -280,10 +280,19 @@ body {
 .combine-body {
   padding: var(--gap);
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);   /* was: auto auto minmax(0, 1fr) */
   gap: var(--gap);
   min-height: 0;
 }
+.combine-feedback {
+  min-height: 1.4em;
+  text-align: center;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  color: var(--dim);
+}
+.combine-feedback.good { color: var(--good); }
+.combine-feedback.bad  { color: var(--bad); }
 .targets {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -635,6 +644,7 @@ body {
       <button id="combine-go" type="button" disabled>Combine</button>
     </div>
     <ul class="inv-list" id="combine-inv"></ul>
+    <div class="combine-feedback" id="combine-feedback"></div>
   </div>
 </div>
 
@@ -647,7 +657,7 @@ body {
   </div>
 </div>
 
-<details class="dev">
+<details class="dev" hidden>
   <summary>dev</summary>
   <button data-open="ov-welcome" type="button">welcome</button>
   <button data-open="ov-map" type="button">map</button>
@@ -730,12 +740,12 @@ const TERRAIN_RESOURCES = {
   cemetery:    [["rock", 2]],
   valley:      [["rock", 3], ["wood", 1]],
   cave:        [["rock", 2], ["wood", 1]],
-  stone_hall:  [["ore", 3], ["coal", 2]],
-  crypt:       [["ore", 2], ["coal", 3]],
-  armory:      [["ore", 4], ["coal", 2]],
-  library:     [["coal", 4], ["ore", 1]],
-  sanctum:     [["ore", 3], ["coal", 3]],
-  shrine_hall: [["ore", 2], ["coal", 2]],
+  stone_hall:  [["rock", 0], ["coal", 2]],
+  crypt:       [["rock", 0], ["coal", 3]],
+  armory:      [["rock", 0], ["coal", 2]],
+  library:     [["coal", 4], ["rock", 1]],
+  sanctum:     [["rock", 3], ["coal", 3]],
+  shrine_hall: [["rock", 2], ["coal", 2]],
 };
 
 const DESCRIPTION_SETS = {
@@ -2087,6 +2097,7 @@ const els = {
   combine:       $("ov-combine"),
   combineInv:    $("combine-inv"),
   combineGo:     $("combine-go"),
+  combineFeedback: $("combine-feedback"),
   slotA:         $("slot-a"),
   slotB:         $("slot-b"),
   ended:         $("ended"),
@@ -2315,7 +2326,7 @@ function renderMap(session) {
   const totalH = pad * 2 + dims.y * cell + (dims.y - 1) * gap;
   els.mapSvg.setAttribute("viewBox", `0 0 ${totalW} ${totalH}`);
   const parts = [];
-  parts.push(`<g fill="#0e1218" stroke="#2a3440" stroke-width="1">`);
+  parts.push(`<g fill="#0e1218" stroke="#7fb8e8" stroke-width="3">`);
   for (let y = 0; y < dims.y; y++)
     for (let x = 0; x < dims.x; x++) {
       const cx = pad + x * (cell + gap);
@@ -2323,7 +2334,7 @@ function renderMap(session) {
       parts.push(`<rect x="${cx}" y="${cy}" width="${cell}" height="${cell}"/>`);
     }
   parts.push(`</g>`);
-  parts.push(`<g stroke="#7fb8e8" stroke-width="9">`);
+  parts.push(`<g stroke="#7fb8e8" stroke-width="27">`);
   for (let y = 0; y < dims.y; y++)
     for (let x = 0; x < dims.x; x++) {
       const room = session.world.getRoom(p.map, x, y, p.z);
@@ -2399,7 +2410,7 @@ function buildFullConfig({ name, width, height, seed }) {
     braid: 0.08,
     enemy_density: 8,
     resource_chance: 0.25,
-    ore_count: 4,
+    ore_count: 0,
     bomb_walls: 2,
     description_set: "shrine",
     boss: "dragon_red",
@@ -2555,6 +2566,7 @@ function submit(text) {
   }
   render(stateFromSession(currentSession));
   currentSession.save();
+  return result;
 }
 
 function showEnded(reason) {
@@ -2673,8 +2685,12 @@ els.combineGo.addEventListener("click", () => {
   if (!combineSlots.a || !combineSlots.b) return;
   const cmd = `combine ${combineSlots.a} ${combineSlots.b}`;
   clearSlots();
-  els.combine.hidden = true;
-  submit(cmd);
+  const result = submit(cmd);
+  renderCombineInv();                       // refresh list with new inventory
+  const line = result && result.lines.length
+    ? result.lines[result.lines.length - 1] : "";
+  els.combineFeedback.textContent = line;
+  els.combineFeedback.className = "combine-feedback " + (classify(line) || "");
 });
 
 // --------------------------------------------------------------- dev
