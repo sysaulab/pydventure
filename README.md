@@ -1,5 +1,7 @@
 # pydventure
 
+For the web port, click [here](https://sysaulab.github.io/adventure.html). For the python text based original, keep reading.
+
 A small, hackable text-adventure engine. You explore a world of procedurally
 generated rooms, craft tools from what you find, fight monsters with dice,
 collect crystals, and descend into dungeons. Everything is stored as plain
@@ -39,6 +41,8 @@ If `python` isn't found, try `python3`.
 ---
 
 ## Screenshots
+
+![pydventure_app.py](adventure.png)
 
 ![pydventure_touch.py](pydventure_touch.png)
 

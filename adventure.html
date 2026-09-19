@@ -34,107 +34,39 @@ body {
   overflow: hidden;
 }
 
-/* ------------------------------------------------------------------ layout */
+/* -------------------------------------------------------------- app shell */
 
 .app {
   height: 100dvh;
   display: grid;
-
-  /* Portrait: single column, scene pinned at >= 50dvh, log eats the rest. */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows:
-    auto                    /* scene   — real height set on the element */
-    auto                    /* combat  — collapses to 0 when [hidden]     */
-    auto                    /* desc                                       */
-    minmax(0, 1fr)          /* log     — takes leftover height            */
-    auto;                   /* status                                     */
+  grid-template-rows: minmax(50dvh, 1fr) auto;
   grid-template-areas:
     "scene"
-    "combat"
-    "desc"
-    "log"
     "status";
 }
-
 @media (orientation: landscape) {
   .app {
-    /* Two columns. Nav zone is >= 50vw, scene takes what's left. */
-    grid-template-columns: minmax(0, 1fr) minmax(50vw, 1fr);
-    grid-template-rows:
-      auto                  /* combat  */
-      auto                  /* desc    */
-      minmax(0, 1fr)        /* log     */
-      auto;                 /* status  */
-    grid-template-areas:
-      "scene combat"
-      "scene desc"
-      "scene log"
-      "scene status";
+    grid-template-columns: minmax(75vw, 1fr) minmax(25vw, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "scene status";
   }
 }
-
 .app > .scene-wrap { grid-area: scene; }
-.app > .combat     { grid-area: combat; }
-.app > .desc       { grid-area: desc; }
-.app > .log        { grid-area: log; }
 .app > .status     { grid-area: status; }
 
-
-/* ------------------------------------------------------------------ combat */
-
-.combat {
-  display: flex; align-items: center; gap: 0.6em;
-  padding: 0.5em 0.8em;
-  background: var(--panel-2);
-  border-bottom: 1px solid var(--edge);
-  flex-wrap: wrap;
-}
-.combat[hidden] { display: none; }
-.combat .label {
-  font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--dim);
-}
-.combat .chips { display: flex; gap: 0.35em; flex-wrap: wrap; }
-.combat .spacer { flex: 1; }
-.combat .combat-actions { display: flex; gap: 0.4em; }
-
-.chip {
-  display: inline-flex; align-items: baseline; gap: 0.4em;
-  padding: 0.2em 0.55em;
-  border-radius: 0.3rem;
-  border: 1px solid var(--edge);
-  background: var(--panel);
-  font-family: ui-monospace, monospace;
-  font-size: 0.85em;
-}
-.chip.enemy { color: var(--bad);  border-color: #3a1a1a; background: #1a0a0a; }
-.chip.ep    { color: var(--dim);  background: transparent; }
-.chip.item  { color: var(--item); border-color: #3a2a4a; background: #1a1028; }
-.chip small { color: var(--dim); font-size: 0.85em; }
-
-.combat button {
-  font: inherit; font-weight: 600;
-  padding: 0.4em 0.9em;
-  border: 1px solid var(--edge); border-radius: 0.35rem;
-  background: #1a2838; color: var(--fg); cursor: pointer;
-}
-.combat button:hover { background: #26394e; }
-.combat button[data-cmd="fight"]    { color: var(--bad);  border-color: #3a1a1a; }
-.combat button[data-cmd="flee"]     { color: var(--dim); }
-.combat button[data-cmd="use fire"] { color: var(--good); border-color: #1a3a1a; }
-
-/* ------------------------------------------------------------------- scene */
+/* ------------------------------------------------------------------ scene */
 
 .scene-wrap {
   position: relative;
   background: var(--panel);
-  min-height: 50dvh;              /* portrait: at least half the height */
+  min-height: 50dvh;
+  overflow: hidden;
 }
-
 @media (orientation: landscape) {
   .scene-wrap {
-    min-height: 0;                /* landscape: height is the full column */
-    border-right: 1px solid var(--edge);   /* seam between scene and nav */
+    min-height: 0;
+    border-right: 1px solid var(--edge);
   }
 }
 #scene {
@@ -163,49 +95,106 @@ body {
 .btn[data-present="false"] { display: none; }
 .btn text.sub { fill: var(--dim); }
 
-/* ------------------------------------------------------------------- desc */
+/* ------------------------------------------------------------ center panel */
 
-.desc {
-  padding: 0.6em 1em;
-  background: var(--panel);
-  border-top: 1px solid var(--edge);
-  display: flex; flex-direction: column; gap: 0.5em;
-  max-height: 22vh; overflow-y: auto;
+.center-panel {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(400px, 72%);
+  max-height: 82%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55em;
+  padding: 0.9em 1em;
+  background: rgba(8, 12, 18, 0.88);
+  border: 1px solid var(--edge);
+  border-radius: 0.7em;
+  overflow-y: auto;
+  font-size: 0.9em;
+  z-index: 2;
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
-.desc-text {
+.center-panel .desc-text {
   margin: 0;
   font-style: italic;
+  color: var(--fg);
   text-wrap: pretty;
+  font-size: 0.95em;
 }
-.desc .items { display: flex; flex-wrap: wrap; gap: 0.35em; }
-.chip.item button {
+.center-panel .enemies,
+.center-panel .items,
+.center-panel .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35em;
+}
+.center-panel .enemies:empty,
+.center-panel .items:empty,
+.center-panel .actions:empty { display: none; }
+
+.center-panel .chip {
+  display: inline-flex; align-items: baseline; gap: 0.4em;
+  padding: 0.2em 0.55em;
+  border-radius: 0.3rem;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+}
+.center-panel .chip.enemy { color: var(--bad);  border-color: #3a1a1a; background: #1a0a0a; }
+.center-panel .chip.ep    { color: var(--dim);  background: transparent; }
+.center-panel .chip.item  { color: var(--item); border-color: #3a2a4a; background: #1a1028; }
+.center-panel .chip small { color: var(--dim); font-size: 0.85em; }
+
+.center-panel .chip.item button {
   font: inherit; font-weight: 600;
   border: 0; background: #2a1e40; color: var(--item);
   padding: 0 0.6em; margin: -0.2em -0.55em -0.2em 0.2em;
   border-radius: 0 0.3rem 0.3rem 0;
   cursor: pointer;
 }
-.chip.item button:hover { background: #3a2a58; }
+.center-panel .chip.item button:hover { background: #3a2a58; }
 
-/* -------------------------------------------------------------------- log */
-
-.log {
-  background: var(--panel);
-  border-top: 1px solid var(--edge);
-  padding: 0.5em 1em;
-  font-family: ui-monospace, monospace;
-  font-size: 0.9em;
-  line-height: 1.5;
-  overflow-y: auto;
+.center-panel .actions button {
+  font: inherit; font-weight: 600;
+  padding: 0.4em 0.9em;
+  border: 1px solid var(--edge); border-radius: 0.35rem;
+  background: #1a2838; color: var(--fg); cursor: pointer;
 }
-.log p { margin: 0 0 0.15em; white-space: pre-wrap; text-wrap: pretty; }
-.log p.good  { color: var(--good); }
-.log p.bad   { color: var(--bad); }
-.log p.dim   { color: var(--dim); }
-.log p.title { color: var(--title); font-weight: 600; }
-.log p.prompt{ color: var(--accent); }
+.center-panel .actions button:hover { background: #26394e; }
+.center-panel .actions button[data-cmd="fight"]    { color: var(--bad);  border-color: #3a1a1a; }
+.center-panel .actions button[data-cmd="flee"]     { color: var(--dim); }
+.center-panel .actions button[data-cmd="use fire"] { color: var(--good); border-color: #1a3a1a; }
 
-/* ------------------------------------------------------------------ status */
+.center-panel .feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1em;
+  border-top: 1px solid var(--edge);
+  padding-top: 0.5em;
+  margin-top: 0.1em;
+  font-family: ui-monospace, monospace;
+  font-size: 0.82em;
+  line-height: 1.45;
+  max-height: 5.4em;
+  overflow: hidden;
+}
+.center-panel .feedback:empty { display: none; }
+.center-panel .feedback p {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--dim);
+  text-wrap: pretty;
+}
+.center-panel .feedback p:first-child { color: var(--fg); }
+.center-panel .feedback p.good  { color: var(--good); }
+.center-panel .feedback p.bad   { color: var(--bad); }
+.center-panel .feedback p.title { color: var(--title); font-weight: 600; }
+
+/* ---------------------------------------------------------------- status */
 
 .status {
   display: flex; flex-wrap: wrap; gap: 0.5em;
@@ -215,6 +204,18 @@ body {
   border-top: 1px solid var(--edge);
   font-weight: 600;
 }
+@media (orientation: landscape) {
+  .status {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.7em;
+    padding: 1.2em;
+    border-top: 0;
+    overflow-y: auto;
+    font-size: 1.02em;
+  }
+  .status .sep { display: none; }
+}
 .status .sep  { color: var(--edge); }
 .status .hp   { color: var(--good); }
 .status .hp.low { color: var(--bad); }
@@ -222,6 +223,23 @@ body {
 .status .inv  {
   font-family: ui-monospace, monospace; font-weight: 400;
   color: var(--dim);
+  display: inline-flex; flex-wrap: wrap; gap: 0.4em;
+  align-items: baseline;
+}
+.status .inv-slot {
+  padding: 0 0.25em;
+  border-radius: 0.2rem;
+  transition: background 100ms, color 100ms;
+}
+.status .inv-slot[data-use] {
+  cursor: pointer;
+  color: var(--item);
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.status .inv-slot[data-use]:hover {
+  background: #1a2838;
+  color: var(--fg);
 }
 
 /* ---------------------------------------------------------------- overlays */
@@ -250,8 +268,6 @@ body {
 }
 .overlay header button:hover { background: #26394e; }
 
-/* ---------------------------------------------------------------- map view */
-
 .map-body { padding: var(--gap); min-height: 0; overflow: auto; }
 #map-svg {
   display: block;
@@ -260,8 +276,6 @@ body {
   background: var(--panel);
   border-radius: 0.4rem;
 }
-
-/* ------------------------------------------------------------ combine view */
 
 .combine-body {
   padding: var(--gap);
@@ -303,9 +317,7 @@ body {
 .slot .slot-hint { font-size: 0.85em; color: var(--dim); }
 .slot .slot-item { font-size: 1.1em; font-weight: 700; }
 
-.combine-actions {
-  display: flex; justify-content: center;
-}
+.combine-actions { display: flex; justify-content: center; }
 .combine-actions button {
   font: inherit; font-weight: 600;
   padding: 0.6em 1.6em;
@@ -337,8 +349,6 @@ body {
 .inv-list .inv-item .count { color: var(--dim); font-size: 0.85em; }
 .inv-list .empty { color: var(--dim); font-style: italic; }
 
-/* ---------------------------------------------------------------- welcome */
-
 .overlay.welcome {
   display: grid;
   place-items: center;
@@ -346,6 +356,7 @@ body {
   padding: var(--gap);
   overflow-y: auto;
 }
+.overlay.welcome[hidden] { display: none; }
 .welcome .card {
   width: min(32rem, 100%);
   max-height: calc(100dvh - 2 * var(--gap));
@@ -356,24 +367,10 @@ body {
   padding: 1.6em;
   display: flex; flex-direction: column; gap: 1.1em;
 }
-.welcome h1 {
-  margin: 0;
-  font-size: 1.6em;
-  letter-spacing: 0.02em;
-  color: var(--gold);
-}
-.welcome .sub {
-  margin: 0;
-  color: var(--dim);
-  font-size: 0.9em;
-  min-height: 1.4em;
-}
-.welcome .form {
-  display: flex; flex-direction: column; gap: 0.8em;
-}
-.welcome label {
-  display: flex; flex-direction: column; gap: 0.25em;
-}
+.welcome h1 { margin: 0; font-size: 1.6em; letter-spacing: 0.02em; color: var(--gold); }
+.welcome .sub { margin: 0; color: var(--dim); font-size: 0.9em; min-height: 1.4em; }
+.welcome .form { display: flex; flex-direction: column; gap: 0.8em; }
+.welcome label { display: flex; flex-direction: column; gap: 0.25em; }
 .welcome label span {
   font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.08em;
   color: var(--dim); font-weight: 600;
@@ -386,15 +383,8 @@ body {
   font-size: 1rem;
 }
 .welcome input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.welcome .field-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1.6fr;
-  gap: 0.6em;
-}
-.welcome .actions {
-  display: flex; gap: 0.6em; justify-content: flex-end;
-  margin-top: 0.3em;
-}
+.welcome .field-row { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 0.6em; }
+.welcome .actions { display: flex; gap: 0.6em; justify-content: flex-end; margin-top: 0.3em; }
 .welcome .actions button {
   font: inherit; font-weight: 600;
   padding: 0.7em 1.2em;
@@ -402,18 +392,10 @@ body {
   cursor: pointer;
   letter-spacing: 0.03em;
 }
-.welcome #w-regenerate {
-  background: #1a2838; color: var(--fg);
-  border: 1px solid var(--edge);
-}
+.welcome #w-regenerate { background: #1a2838; color: var(--fg); border: 1px solid var(--edge); }
 .welcome #w-regenerate:hover { background: #26394e; }
-.welcome #w-play {
-  background: var(--gold); color: #1a1208;
-  border: 0;
-}
+.welcome #w-play { background: var(--gold); color: #1a1208; border: 0; }
 .welcome #w-play:hover { background: #e8c67f; }
-
-/* ----------------------------------------------------------- ended modal */
 
 .ended {
   position: fixed; inset: 0; z-index: 20;
@@ -438,8 +420,6 @@ body {
 }
 .ended button:hover { background: #26394e; }
 
-/* ------------------------------------------------------------------ dev */
-
 .dev {
   position: fixed; bottom: 0.4em; right: 0.4em; z-index: 30;
   font-size: 0.75rem; color: var(--dim);
@@ -455,13 +435,6 @@ body {
 <body>
 
 <div class="app">
-
-  <header class="combat" id="combat" hidden>
-    <span class="label">Enemies</span>
-    <div class="chips" id="combat-chips"></div>
-    <div class="spacer"></div>
-    <div class="combat-actions" id="combat-actions"></div>
-  </header>
 
   <main class="scene-wrap">
     <svg id="scene" viewBox="0 0 900 700" preserveAspectRatio="xMidYMid meet" aria-label="Room scene">
@@ -531,64 +504,62 @@ body {
 
       <g id="buttons">
         <g class="btn" data-kind="door" data-dir="N" data-cmd="move n"
-           transform="translate(450,100)" role="button" tabindex="0" aria-label="Move north">
+           transform="translate(450,56)" role="button" tabindex="0" aria-label="Move north">
           <circle class="body" r="46"/>
           <text class="glyph" y="10" text-anchor="middle" font-size="30" font-weight="700">N</text>
           <text class="sub" y="30" text-anchor="middle" font-size="14"></text>
         </g>
         <g class="btn" data-kind="door" data-dir="S" data-cmd="move s"
-           transform="translate(450,600)" role="button" tabindex="0" aria-label="Move south">
+           transform="translate(450,644)" role="button" tabindex="0" aria-label="Move south">
           <circle class="body" r="46"/>
           <text class="glyph" y="10" text-anchor="middle" font-size="30" font-weight="700">S</text>
           <text class="sub" y="30" text-anchor="middle" font-size="14"></text>
         </g>
         <g class="btn" data-kind="door" data-dir="E" data-cmd="move e"
-           transform="translate(760,350)" role="button" tabindex="0" aria-label="Move east">
+           transform="translate(844,350)" role="button" tabindex="0" aria-label="Move east">
           <circle class="body" r="46"/>
           <text class="glyph" y="10" text-anchor="middle" font-size="30" font-weight="700">E</text>
           <text class="sub" y="30" text-anchor="middle" font-size="14"></text>
         </g>
         <g class="btn" data-kind="door" data-dir="W" data-cmd="move w"
-           transform="translate(140,350)" role="button" tabindex="0" aria-label="Move west">
+           transform="translate(56,350)" role="button" tabindex="0" aria-label="Move west">
           <circle class="body" r="46"/>
           <text class="glyph" y="10" text-anchor="middle" font-size="30" font-weight="700">W</text>
           <text class="sub" y="30" text-anchor="middle" font-size="14"></text>
         </g>
-
         <g class="btn" data-kind="updown" data-dir="U" data-cmd="move u"
-           transform="translate(210,120)" role="button" tabindex="0" aria-label="Go up">
+           transform="translate(84,84)" role="button" tabindex="0" aria-label="Go up">
           <circle class="body" r="40"/>
           <text class="glyph" y="12" text-anchor="middle" font-size="34" font-weight="700">↑</text>
           <text class="sub" y="28" text-anchor="middle" font-size="14"></text>
         </g>
         <g class="btn" data-kind="updown" data-dir="D" data-cmd="move d"
-           transform="translate(690,580)" role="button" tabindex="0" aria-label="Go down">
+           transform="translate(816,616)" role="button" tabindex="0" aria-label="Go down">
           <circle class="body" r="40"/>
           <text class="glyph" y="12" text-anchor="middle" font-size="34" font-weight="700">↓</text>
           <text class="sub" y="28" text-anchor="middle" font-size="14"></text>
         </g>
-
         <g class="btn" data-kind="special" data-open="ov-combine"
-           transform="translate(210,580)" role="button" tabindex="0" aria-label="Combine">
+           transform="translate(84,616)" role="button" tabindex="0" aria-label="Combine">
           <circle class="body" r="40"/>
           <text class="glyph" y="18" text-anchor="middle" font-size="52" font-weight="700">⚗</text>
         </g>
-
         <g class="btn" data-kind="special" data-open="ov-map"
-           transform="translate(690,120)" role="button" tabindex="0" aria-label="Map">
+           transform="translate(816,84)" role="button" tabindex="0" aria-label="Map">
           <circle class="body" r="40"/>
           <text class="glyph" y="17" text-anchor="middle" font-size="48" font-weight="700">⊞</text>
         </g>
       </g>
     </svg>
+
+    <div class="center-panel" id="center-panel">
+      <p   class="desc-text" id="desc-text"></p>
+      <div class="enemies"   id="center-enemies"></div>
+      <div class="items"     id="center-items"></div>
+      <div class="actions"   id="center-actions"></div>
+      <div class="feedback"  id="feedback"></div>
+    </div>
   </main>
-
-  <section class="desc">
-    <p class="desc-text" id="desc-text"></p>
-    <div class="items" id="desc-items"></div>
-  </section>
-
-  <section class="log" id="log"></section>
 
   <footer class="status" id="status"></footer>
 
@@ -649,7 +620,6 @@ body {
     <button data-close type="button">Close</button>
   </header>
   <div class="combine-body">
-
     <div class="targets">
       <div class="slot" id="slot-a" data-slot="a">
         <span class="slot-item" hidden></span>
@@ -661,13 +631,10 @@ body {
         <span class="slot-hint">Click or drop item</span>
       </div>
     </div>
-
     <div class="combine-actions">
       <button id="combine-go" type="button" disabled>Combine</button>
     </div>
-
     <ul class="inv-list" id="combine-inv"></ul>
-
   </div>
 </div>
 
@@ -693,30 +660,21 @@ body {
 "use strict";
 
 // ============================================================================
-// CONFIG — game tables, ported from pydventure_gamemaker.py
+// CONFIG
 // ============================================================================
 
 const SKILL_NAMES = new Set(["fight", "avoidance", "search"]);
 
 const ENEMIES = {
-  octorok_blue: { difficulty: 1  },
-  bat_blue:     { difficulty: 2  },
-  spider_blue:  { difficulty: 3  },
-  fan:          { difficulty: 5  },
-  rhinos:       { difficulty: 6  },
-  knight_blue:  { difficulty: 7  },
-  octorok_red:  { difficulty: 11 },
-  bat_red:      { difficulty: 12 },
-  spider_red:   { difficulty: 13 },
-  fan_red:      { difficulty: 15 },
-  rhinos_red:   { difficulty: 16 },
-  knight_red:   { difficulty: 17 },
-  ghosts:       { difficulty: 19 },
-  stalfos:      { difficulty: 20 },
-  darknut:      { difficulty: 24 },
-  wizzrobe:     { difficulty: 27 },
-  dragon:       { difficulty: 50 },
-  dragon_red:   { difficulty: 200 },
+  octorok_blue: { difficulty: 1  }, bat_blue:     { difficulty: 2  },
+  spider_blue:  { difficulty: 3  }, fan:          { difficulty: 5  },
+  rhinos:       { difficulty: 6  }, knight_blue:  { difficulty: 7  },
+  octorok_red:  { difficulty: 11 }, bat_red:      { difficulty: 12 },
+  spider_red:   { difficulty: 13 }, fan_red:      { difficulty: 15 },
+  rhinos_red:   { difficulty: 16 }, knight_red:   { difficulty: 17 },
+  ghosts:       { difficulty: 19 }, stalfos:      { difficulty: 20 },
+  darknut:      { difficulty: 24 }, wizzrobe:     { difficulty: 27 },
+  dragon:       { difficulty: 50 }, dragon_red:   { difficulty: 200 },
 };
 
 const DROPS = {
@@ -821,7 +779,7 @@ const OPPOSITE = { N: "S", S: "N", E: "W", W: "E", U: "D", D: "U" };
 const DIR_NAMES = { N: "north", E: "east", S: "south", W: "west", U: "up", D: "down" };
 
 // ============================================================================
-// RNG — mulberry32 + FNV-1a string hash
+// RNG
 // ============================================================================
 
 function hashString(s) {
@@ -865,16 +823,13 @@ class RNG {
     for (const [, w] of pairs) total += w;
     let r = this.next() * total;
     let acc = 0;
-    for (const [k, w] of pairs) {
-      acc += w;
-      if (r < acc) return k;
-    }
+    for (const [k, w] of pairs) { acc += w; if (r < acc) return k; }
     return pairs[pairs.length - 1][0];
   }
 }
 
 // ============================================================================
-// WORLD GENERATION — ported from pydventure_mazemaker.py
+// WORLD GENERATION
 // ============================================================================
 
 class Maze {
@@ -1277,10 +1232,7 @@ function parseRequirement(text) {
   if (m) {
     const name = m[1].trim();
     const consume = parseInt(m[2], 10);
-    return {
-      name, consume,
-      kind: SKILL_NAMES.has(name) ? "skill" : (consume > 0 ? "consumable" : "item"),
-    };
+    return { name, consume, kind: SKILL_NAMES.has(name) ? "skill" : (consume > 0 ? "consumable" : "item") };
   }
   const name = String(text).trim();
   return { name, consume: 0, kind: SKILL_NAMES.has(name) ? "skill" : "item" };
@@ -1347,8 +1299,7 @@ function buildRoom(level, x, y, z) {
   for (const spec of level.items[k] || []) zone.items.push(parseItemSpec(spec));
 
   return {
-    map: level.name,
-    x, y, z,
+    map: level.name, x, y, z,
     description: level.descriptions[k] || "",
     zones: [zone],
   };
@@ -1362,7 +1313,6 @@ class World {
     this.levels = {};
     this.rooms = {};
   }
-
   generate() {
     for (const mcfg of this.config.maps) {
       const lvl = new Level(mcfg, this.config, this.rng);
@@ -1373,7 +1323,6 @@ class World {
     for (const lvl of Object.values(this.levels)) lvl.composeDescriptions();
     this.buildRooms();
   }
-
   linkDungeons() {
     const ow = this.levels.overworld;
     if (!ow) return;
@@ -1387,7 +1336,6 @@ class World {
     this.rng.shuffle(dead);
     this.rng.shuffle(other);
     const ordered = [...dead, ...other];
-
     for (const [name, lvl] of Object.entries(this.levels)) {
       if (name === "overworld") continue;
       const cell = ordered.find(c => !used.has(`${c[0]},${c[1]}`));
@@ -1404,7 +1352,6 @@ class World {
       lvl.setTeleport(0, 0, 0, "U", `<overworld:${ox},${oy},0,${backDir}>`);
     }
   }
-
   buildRooms() {
     for (const [name, lvl] of Object.entries(this.levels)) {
       for (let z = 0; z < lvl.depth; z++)
@@ -1413,13 +1360,8 @@ class World {
             this.rooms[`${name}|${x},${y},${z}`] = buildRoom(lvl, x, y, z);
     }
   }
-
-  getRoom(mapName, x, y, z) {
-    return this.rooms[`${mapName}|${x},${y},${z}`] || null;
-  }
-
+  getRoom(mapName, x, y, z) { return this.rooms[`${mapName}|${x},${y},${z}`] || null; }
   mapNames() { return Object.keys(this.levels); }
-
   dimensions(mapName) {
     const lvl = this.levels[mapName];
     if (!lvl) return { x: 0, y: 0, z: 0 };
@@ -1448,9 +1390,7 @@ class Player {
   }
   takeDamage(n) { this.hp = Math.max(0, this.hp - n); }
   healFull() { this.hp = this.maxHp; }
-  addItem(name, count = 1) {
-    this.inventory[name] = (this.inventory[name] || 0) + count;
-  }
+  addItem(name, count = 1) { this.inventory[name] = (this.inventory[name] || 0) + count; }
   removeItem(name, count = 1) {
     if ((this.inventory[name] || 0) >= count) {
       this.inventory[name] -= count;
@@ -1462,14 +1402,8 @@ class Player {
   hasItem(name, count = 1) { return (this.inventory[name] || 0) >= count; }
   getSkill(s) { return this.skills[s] || 0; }
   increaseSkill(s) { this.skills[s] = (this.skills[s] || 0) + 1; }
-  spendCoins(n) {
-    if (this.coins >= n) { this.coins -= n; return true; }
-    return false;
-  }
-  grant(name, count = 1) {
-    if (name === "sword") this.swordLevel += 1;
-    else this.addItem(name, count);
-  }
+  spendCoins(n) { if (this.coins >= n) { this.coins -= n; return true; } return false; }
+  grant(name, count = 1) { if (name === "sword") this.swordLevel += 1; else this.addItem(name, count); }
   toJSON() {
     return {
       inventory: this.inventory, skills: this.skills,
@@ -1516,9 +1450,7 @@ class RoomState {
         const z = this.room.zones[idx];
         const dirs = Object.keys(z.doors);
         if (dirs.length) z.doors[dirs[0]].reach = null;
-      } else if (req.kind === "skill") {
-        this.player.increaseSkill(req.name);
-      }
+      } else if (req.kind === "skill") this.player.increaseSkill(req.name);
     }
     this.currentZone = idx;
     this.player.zone = idx;
@@ -1738,7 +1670,6 @@ class Session {
     this.roomState = null;
     this.loadCurrentRoom();
   }
-
   loadCurrentRoom() {
     const p = this.player;
     const key = `${p.map}|${p.x},${p.y},${p.z}`;
@@ -1751,18 +1682,15 @@ class Session {
     }
     this.roomState = new RoomState(room, this.player);
   }
-
   findZoneForEntrance(room, dir) {
     for (let i = 0; i < room.zones.length; i++)
       if (room.zones[i].doors[dir]) return i;
     return 0;
   }
-
   neighborCoords(dir) {
     const [dx, dy, dz] = DELTA[dir] || [0, 0, 0];
     return [this.player.x + dx, this.player.y + dy, this.player.z + dz];
   }
-
   unlockNeighbor(mapName, x, y, z, dir, reqName) {
     const key = `${mapName}|${x},${y},${z}`;
     let room = this.deltas[key];
@@ -1780,7 +1708,6 @@ class Session {
       }
     }
   }
-
   enemyBlock(emit) {
     if (!this.roomState) return true;
     const enemies = this.roomState.currentEnemies();
@@ -1790,7 +1717,6 @@ class Session {
     emit(`You slip past the enemies! ${res.msg}`);
     return true;
   }
-
   moveThroughDoor(dir) {
     if (!this.roomState) return { ok: false, msg: "No room." };
     const rs = this.roomState;
@@ -1843,7 +1769,6 @@ class Session {
     this.lastMoveDir = dir;
     return { ok: true, msg: `You move ${dir}.` };
   }
-
   openDoorWithItem(dir, itemName) {
     const rs = this.roomState;
     if (!rs) return { ok: false, msg: "No room." };
@@ -1860,7 +1785,6 @@ class Session {
     }
     return { ok: true, msg: `Used ${itemName} on ${dir} door.` };
   }
-
   useItem(item, dir = null) {
     const heartItem   = this.combat.heart_item;
     const shelterItem = this.combat.shelter_item;
@@ -1900,17 +1824,14 @@ class Session {
     if (candidates.length > 1) return { ok: false, msg: `Multiple doors require ${item}; specify direction.` };
     return this.openDoorWithItem(candidates[0], item);
   }
-
   takeItem(name) {
     if (!this.roomState) return { ok: false, msg: "No room." };
     return this.roomState.takeItem(name);
   }
-
   buyItem(name) {
     if (!this.roomState) return { ok: false, msg: "No room." };
     return this.roomState.buyItem(name);
   }
-
   findRecipe(inputs) {
     const sig = Object.entries(inputs).sort().map(([k, v]) => `${k}:${v}`).join("|");
     for (const r of RECIPES) {
@@ -1919,7 +1840,6 @@ class Session {
     }
     return null;
   }
-
   combine(inputs) {
     const pretty = Object.entries(inputs).sort()
       .map(([n, c]) => c > 1 ? `${n} x${c}` : n).join(" + ");
@@ -1936,11 +1856,9 @@ class Session {
     if (outCount > 1) return { ok: true, msg: `You combine ${pretty} into ${out.item} x${outCount}.` };
     return { ok: true, msg: `You combine ${pretty} into ${out.item}.` };
   }
-
   checkDeath(emit) {
     if (this.player.hp > 0) return;
     const cfg = this.combat.death;
-    emit("");
     emit("You collapse.");
     if (cfg.restore_hp) this.player.healFull();
     const frac = cfg.coin_loss_fraction;
@@ -1959,33 +1877,26 @@ class Session {
     this.player.zone = 0;
     this.loadCurrentRoom();
   }
-
   handleCommand(cmd) {
     const out = [];
     const emit = s => out.push(String(s ?? ""));
     let endedReason = null;
-
     cmd = cmd.trim();
     if (!cmd) return { lines: out, endedReason };
-
     const parts = cmd.toLowerCase().split(/\s+/);
     const action = parts[0];
-
     const heartItem   = this.combat.heart_item;
     const shelterItem = this.combat.shelter_item;
     const fireItem    = this.combat.fire_item;
-
     const isFight = action === "fight" || (action === "use" && parts[1] === "fight");
     const isFlee  = action === "flee" || action === "avoid"
                  || (action === "use" && ["avoidance", "flee", "avoid"].includes(parts[1]));
     const isHeal  = action === "use" && [heartItem, shelterItem].includes(parts[1]);
     const isFire  = action === "use" && parts[1] === fireItem;
     const isMeta  = ["save", "quit", "exit", "reset", "retreat"].includes(action) || isHeal || isFire;
-
     if (!isFight && !isFlee && !isMeta) {
       if (!this.enemyBlock(emit)) { this.checkDeath(emit); return { lines: out, endedReason }; }
     }
-
     if (action === "quit" || action === "exit") {
       this.save();
       emit("Saved. Bye!");
@@ -2030,15 +1941,12 @@ class Session {
       if (r.ok) {
         const victoryItem = this.goal?.victory_item;
         if (victoryItem && name === victoryItem) {
-          emit("");
           emit("=".repeat(52));
-          emit("  VICTORY");
+          emit("VICTORY");
           emit("=".repeat(52));
           emit(this.goal.victory_message || "You have saved the world.");
-          emit("");
           this.player.won = true;
           this.save();
-          emit("Your legend is saved. Farewell.");
           endedReason = "victory";
         }
       }
@@ -2054,11 +1962,9 @@ class Session {
     } else {
       emit("Unknown command.");
     }
-
     if (!endedReason) this.checkDeath(emit);
     return { lines: out, endedReason };
   }
-
   save() {
     try {
       const data = {
@@ -2076,7 +1982,7 @@ class Session {
 }
 
 // ============================================================================
-// STATE SHAPING — session → render state
+// STATE SHAPING
 // ============================================================================
 
 function pickTerrain(description) {
@@ -2105,7 +2011,6 @@ function stateFromSession(session) {
   const p = session.player;
   const rs = session.roomState;
   const goal = session.goal;
-
   let room = null;
   if (rs) {
     const doors = {};
@@ -2141,11 +2046,9 @@ function stateFromSession(session) {
       canFire: enemies.length > 0 && hasFire,
     };
   }
-
   const goalItem = goal?.item || "crystal";
   const goalCount = goal?.count || 0;
   const goalHave = p.inventory[goalItem] || 0;
-
   return {
     gameName: session.world.config.name || "mygame",
     player: {
@@ -2168,29 +2071,28 @@ function stateFromSession(session) {
 
 const $ = id => document.getElementById(id);
 const els = {
-  combat:       $("combat"),
-  combatChips:  $("combat-chips"),
-  combatActs:   $("combat-actions"),
-  terrain:      $("terrain"),
-  terrainBg:    $("terrain-bg"),
-  sky:          $("sky"),
-  descText:     $("desc-text"),
-  descItems:    $("desc-items"),
-  log:          $("log"),
-  status:       $("status"),
-  welcome:      $("ov-welcome"),
-  map:          $("ov-map"),
-  mapSvg:       $("map-svg"),
-  mapStatus:    $("map-status"),
-  combine:      $("ov-combine"),
-  combineInv:   $("combine-inv"),
-  combineGo:    $("combine-go"),
-  slotA:        $("slot-a"),
-  slotB:        $("slot-b"),
-  ended:        $("ended"),
-  endedTitle:   $("ended-title"),
-  endedBody:    $("ended-body"),
-  endedClose:   $("ended-close"),
+  terrain:       $("terrain"),
+  terrainBg:     $("terrain-bg"),
+  sky:           $("sky"),
+  descText:      $("desc-text"),
+  centerEnemies: $("center-enemies"),
+  centerItems:   $("center-items"),
+  centerActions: $("center-actions"),
+  feedback:      $("feedback"),
+  status:        $("status"),
+  welcome:       $("ov-welcome"),
+  map:           $("ov-map"),
+  mapSvg:        $("map-svg"),
+  mapStatus:     $("map-status"),
+  combine:       $("ov-combine"),
+  combineInv:    $("combine-inv"),
+  combineGo:     $("combine-go"),
+  slotA:         $("slot-a"),
+  slotB:         $("slot-b"),
+  ended:         $("ended"),
+  endedTitle:    $("ended-title"),
+  endedBody:     $("ended-body"),
+  endedClose:    $("ended-close"),
 };
 
 const TERRAIN_STYLES = {
@@ -2207,28 +2109,36 @@ const TERRAIN_STYLES = {
   sanctum:    { sky: ["#140c1c", "#0a0810"], ground: "#0a0810" },
   shrine:     { sky: ["#080810", "#080810"], ground: "#080810" },
 };
-
 let currentTerrain = null;
 
 function renderTerrain(terrain) {
   if (terrain === currentTerrain) return;
   currentTerrain = terrain;
   const s = TERRAIN_STYLES[terrain] || TERRAIN_STYLES.cave;
-  els.sky.children[0].setAttribute("stop-color", s.sky[0]);
-  els.sky.children[1].setAttribute("stop-color", s.sky[1]);
-  els.terrain.querySelectorAll("path").forEach(p => {
-    p.setAttribute("fill", s.ground);
-  });
+  if (els.sky && els.sky.children[0] && els.sky.children[1]) {
+    els.sky.children[0].setAttribute("stop-color", s.sky[0]);
+    els.sky.children[1].setAttribute("stop-color", s.sky[1]);
+  }
+  els.terrain.querySelectorAll("path").forEach(p => p.setAttribute("fill", s.ground));
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function isUsableItem(name) {
+  if (!currentSession) return false;
+  const c = currentSession.combat;
+  return name === c.fire_item
+      || name === c.shelter_item
+      || name === c.heart_item;
 }
 
 function renderStatus(state) {
   const p = state.player;
   const g = state.goal;
-  const parts = [
-    `<span>${state.gameName}</span>`,
-    `<span class="sep">|</span>`,
-    `<span>${p.map}:${p.x},${p.y},${p.z}</span>`,
-  ];
+  const parts = [`<span>${p.map}:${p.x},${p.y},${p.z}</span>`];
   if (p.coins) parts.push(`<span class="sep">|</span><span>coins ${p.coins}</span>`);
   parts.push(`<span class="sep">|</span><span>sword ${p.swordLevel}</span>`);
   if (g.count) parts.push(`<span class="sep">|</span><span class="goal">${g.item} ${g.have}/${g.count}</span>`);
@@ -2236,51 +2146,61 @@ function renderStatus(state) {
   parts.push(`<span class="sep">|</span><span class="${hpClass}">hp ${p.hp}/${p.maxHp}</span>`);
   const skillStr = Object.entries(p.skills).map(([k, v]) => `${k[0]}${v}`).join("/");
   parts.push(`<span class="sep">|</span><span>skills ${skillStr}</span>`);
+
   const inv = p.inventory;
-  const invStr = Object.keys(inv).length
-    ? Object.entries(inv).map(([k, v]) => `${k}:${v}`).join("  ")
-    : "(empty)";
+  const keys = Object.keys(inv);
+  let invStr;
+  if (!keys.length) {
+    invStr = "(empty)";
+  } else {
+    invStr = keys.map(k => {
+      const label = `${k}:${inv[k]}`;
+      return isUsableItem(k)
+        ? `<span class="inv-slot" data-use="${k}" title="Double-click or long-press to use">${label}</span>`
+        : `<span class="inv-slot">${label}</span>`;
+    }).join("  ");
+  }
   parts.push(`<span class="sep">|</span><span class="inv">inv  ${invStr}</span>`);
   els.status.innerHTML = parts.join("");
 }
 
-function renderCombat(room) {
-  if (!room || !room.enemies || !room.enemies.length) {
-    els.combat.hidden = true;
+function renderCenter(room) {
+  if (!room) {
+    els.descText.textContent = "Empty void. There is nothing here.";
+    els.centerEnemies.innerHTML = "";
+    els.centerItems.innerHTML = "";
+    els.centerActions.innerHTML = "";
     return;
   }
-  els.combat.hidden = false;
-  const chips = room.enemies.map(e =>
-    `<span class="chip enemy">${e.name} ×${e.count} <small>d${e.difficulty}</small></span>`
-  );
-  chips.push(`<span class="chip ep">EP ${room.enemyPower}</span>`);
-  els.combatChips.innerHTML = chips.join("");
+  els.descText.textContent = room.description || "(no description)";
+
+  if (room.enemies && room.enemies.length) {
+    const chips = room.enemies.map(e =>
+      `<span class="chip enemy">${e.name} ×${e.count} <small>d${e.difficulty}</small></span>`);
+    chips.push(`<span class="chip ep">EP ${room.enemyPower}</span>`);
+    els.centerEnemies.innerHTML = chips.join("");
+  } else {
+    els.centerEnemies.innerHTML = "";
+  }
+
+  if (room.items && room.items.length) {
+    els.centerItems.innerHTML = room.items.map(it => {
+      const price = it.price != null ? ` <small>${it.price}c</small>` : "";
+      const req = it.requirements.length ? ` <small>[${it.requirements.join(", ")}]</small>` : "";
+      const verb = it.price != null ? "buy" : "take";
+      const label = it.price != null ? "Buy" : "Take";
+      return `<span class="chip item">${it.name} ×${it.count}${price}${req}` +
+             `<button type="button" data-cmd="${verb} ${it.name}">${label}</button></span>`;
+    }).join("");
+  } else {
+    els.centerItems.innerHTML = "";
+  }
 
   const acts = [];
   if (room.canFight) acts.push(`<button type="button" data-cmd="fight">Fight</button>`);
   if (room.canFlee)  acts.push(`<button type="button" data-cmd="flee">Flee</button>`);
   if (room.canFire)  acts.push(`<button type="button" data-cmd="use fire">Fire</button>`);
-  els.combatActs.innerHTML = acts.join("");
-}
-
-function renderDesc(room) {
-  if (!room) {
-    els.descText.textContent = "Empty void. There is nothing here.";
-    els.descItems.innerHTML = "";
-    return;
-  }
-  els.descText.textContent = room.description || "(no description)";
-  if (room.items.length) {
-    els.descItems.innerHTML = room.items.map(it => {
-      const price = it.price != null ? ` <small style="color:var(--dim)">${it.price}c</small>` : "";
-      const req = it.requirements.length ? ` <small style="color:var(--dim)">[${it.requirements.join(", ")}]</small>` : "";
-      const verb = it.price != null ? "buy" : "take";
-      const label = it.price != null ? "Buy" : "Take";
-      return `<span class="chip item">${it.name} ×${it.count}${price}${req}<button type="button" data-cmd="${verb} ${it.name}">${label}</button></span>`;
-    }).join("");
-  } else {
-    els.descItems.innerHTML = "";
-  }
+  els.centerActions.innerHTML = acts.join("");
 }
 
 function renderDoors(doors) {
@@ -2288,16 +2208,12 @@ function renderDoors(doors) {
     const g = document.querySelector(`.btn[data-dir="${dir}"]`);
     if (!g) continue;
     const d = doors[dir];
-    if (!d || !d.present) {
-      g.dataset.present = "false";
-      continue;
-    }
+    if (!d || !d.present) { g.dataset.present = "false"; continue; }
     g.dataset.present = "true";
     let kind = "door";
     if (d.locked) kind = "locked";
     else if (dir === "U" || dir === "D") kind = "updown";
     g.dataset.kind = kind;
-
     const sub = g.querySelector("text.sub");
     if (sub) {
       if (d.locked && d.label) sub.textContent = d.label;
@@ -2309,19 +2225,20 @@ function renderDoors(doors) {
 
 function render(state) {
   renderStatus(state);
-  renderCombat(state.room);
-  renderDesc(state.room);
+  renderCenter(state.room);
   renderDoors(state.room?.doors || {});
   renderTerrain(state.room?.terrain || "cave");
-  if (currentSession) currentSession._lastState = state;
 }
 
-// --------------------------------------------------------------- log
+// --------------------------------------------------------------- feedback
+
+const feedbackLines = [];
+const MAX_FEEDBACK = 3;
 
 function classify(line) {
   const low = line.toLowerCase();
   if (!line.trim()) return null;
-  if (line.includes("===") && line.includes("VICTORY")) return "title";
+  if (line.includes("VICTORY")) return "title";
   if (low.includes("victory") || low.includes("defeat the") || low.includes("you take")
       || low.includes("you combine") || low.includes("you rest") || low.includes("you collect")
       || low.includes("you buy") || low.includes("you hurl")) return "good";
@@ -2331,17 +2248,24 @@ function classify(line) {
   return null;
 }
 
-function appendLog(text, tag = null) {
-  const atBottom = els.log.scrollHeight - els.log.scrollTop - els.log.clientHeight < 24;
-  const p = document.createElement("p");
-  if (!text) { p.innerHTML = "&nbsp;"; }
-  else { if (tag) p.className = tag; p.textContent = text; }
-  els.log.appendChild(p);
-  while (els.log.children.length > 300) els.log.removeChild(els.log.firstChild);
-  if (atBottom) els.log.scrollTop = els.log.scrollHeight;
+function renderFeedback() {
+  els.feedback.innerHTML = feedbackLines.slice().reverse().map(({ text, tag }) => {
+    const cls = tag ? ` class="${tag}"` : "";
+    return `<p${cls}>${escapeHtml(text)}</p>`;
+  }).join("");
 }
 
-function clearLog() { els.log.innerHTML = ""; }
+function appendFeedback(text, tag = null) {
+  if (text === null || text === undefined || text === "") return;
+  feedbackLines.push({ text: String(text), tag });
+  if (feedbackLines.length > MAX_FEEDBACK) feedbackLines.shift();
+  renderFeedback();
+}
+
+function clearFeedback() {
+  feedbackLines.length = 0;
+  renderFeedback();
+}
 
 // --------------------------------------------------------------- combine UI
 
@@ -2355,7 +2279,7 @@ function renderCombineInv() {
     els.combineInv.innerHTML = `<li class="empty">Inventory is empty.</li>`;
   } else {
     els.combineInv.innerHTML = keys.map(k =>
-      `<li class="inv-item" data-item="${k}">${k} <span class="count">×${inv[k]}</span></li>`
+      `<li class="inv-item" draggable="true" data-item="${k}">${k} <span class="count">×${inv[k]}</span></li>`
     ).join("");
   }
   for (const slot of ["a", "b"]) {
@@ -2377,16 +2301,8 @@ function renderCombineInv() {
   els.combineGo.disabled = !(combineSlots.a && combineSlots.b);
 }
 
-function setSlot(slot, item) {
-  combineSlots[slot] = item;
-  renderCombineInv();
-}
-
-function clearSlots() {
-  combineSlots.a = null;
-  combineSlots.b = null;
-  renderCombineInv();
-}
+function setSlot(slot, item) { combineSlots[slot] = item; renderCombineInv(); }
+function clearSlots() { combineSlots.a = null; combineSlots.b = null; renderCombineInv(); }
 
 // --------------------------------------------------------------- map
 
@@ -2398,7 +2314,6 @@ function renderMap(session) {
   const totalW = pad * 2 + dims.x * cell + (dims.x - 1) * gap;
   const totalH = pad * 2 + dims.y * cell + (dims.y - 1) * gap;
   els.mapSvg.setAttribute("viewBox", `0 0 ${totalW} ${totalH}`);
-
   const parts = [];
   parts.push(`<g fill="#0e1218" stroke="#2a3440" stroke-width="1">`);
   for (let y = 0; y < dims.y; y++)
@@ -2408,7 +2323,6 @@ function renderMap(session) {
       parts.push(`<rect x="${cx}" y="${cy}" width="${cell}" height="${cell}"/>`);
     }
   parts.push(`</g>`);
-
   parts.push(`<g stroke="#7fb8e8" stroke-width="9">`);
   for (let y = 0; y < dims.y; y++)
     for (let x = 0; x < dims.x; x++) {
@@ -2425,7 +2339,6 @@ function renderMap(session) {
       if (doors.N) parts.push(`<line x1="${centerX}" y1="${cyN}" x2="${centerX}" y2="${cyN - gap}"/>`);
     }
   parts.push(`</g>`);
-
   const px = pad + p.x * (cell + gap) + cell / 2;
   const py = pad + (dims.y - 1 - p.y) * (cell + gap) + cell / 2;
   parts.push(`
@@ -2437,7 +2350,6 @@ function renderMap(session) {
         <animate attributeName="opacity" values="1;0.15;1" dur="1.6s" repeatCount="indefinite"/>
       </circle>
     </g>`);
-
   els.mapSvg.innerHTML = parts.join("");
   els.mapStatus.innerHTML = `<span>${p.map}, z = ${p.z}</span>` +
     `<span class="sep">|</span><span class="goal">you are at ${p.x},${p.y}</span>`;
@@ -2449,6 +2361,8 @@ function renderMap(session) {
 
 const DEPTH = 2;
 const DUNGEONS = 7;
+const STORAGE_KEY = "pydventure.world";
+const DEFAULTS = { name: "mygame", width: 8, height: 8, seed: "42" };
 
 let currentSession = null;
 
@@ -2473,7 +2387,7 @@ function buildFullConfig({ name, width, height, seed }) {
       braid: 0.10,
       enemy_density: i,
       resource_chance: 0.25,
-      ore_count: 4,
+      ore_count: 1,
       bomb_walls: 2,
       description_set: "dungeon",
       crystal: true, boss: "dragon",
@@ -2521,10 +2435,7 @@ function startGame(worldCfg) {
   const t1 = performance.now();
   console.log(`World generated in ${(t1 - t0).toFixed(0)} ms`);
 
-  // Try to restore progress if the world config matches.
-  let player = null;
-  let deltas = {};
-  let lastMoveDir = null;
+  let player = null, deltas = {}, lastMoveDir = null;
   try {
     const raw = localStorage.getItem("pydventure.save");
     if (raw) {
@@ -2537,31 +2448,24 @@ function startGame(worldCfg) {
         player = Player.fromJSON(saved.player);
         deltas = saved.deltas || {};
         lastMoveDir = saved.lastMoveDir || null;
-        console.log("Restored saved game.");
       }
     }
   } catch (e) { console.warn("Save load failed:", e); }
 
-  if (!player) {
-    player = new Player({ map: "overworld", x: 0, y: 0, z: 1 });
-  }
+  if (!player) player = new Player({ map: "overworld", x: 0, y: 0, z: 1 });
 
   currentSession = new Session(world, player, { deltas, lastMoveDir });
 
-  clearLog();
-  appendLog(`Welcome to ${config.name}.`, "title");
-  if (player.won) appendLog("The world is quiet. You have already won.", "dim");
-  else appendLog("Click a door, or type a command. Try 'use search' or 'combine wood wood'.", "dim");
-  appendLog("");
+  clearFeedback();
+  appendFeedback(`Welcome to ${config.name}.`, "title");
+  if (player.won) appendFeedback("The world is quiet. You have already won.");
+  else appendFeedback("Click a door, or use the items around you.");
 
   render(stateFromSession(currentSession));
   currentSession.save();
 }
 
-// ------------------------------------------------------------ welcome UI
-
-const STORAGE_KEY = "pydventure.world";
-const DEFAULTS = { name: "mygame", width: 8, height: 8, seed: "42" };
+// --------------------------------------------------------------- form
 
 const field = {
   name:   $("w-name"),
@@ -2576,7 +2480,6 @@ function clampInt(v, lo, hi, fallback) {
   if (Number.isNaN(n)) return fallback;
   return Math.max(lo, Math.min(hi, n));
 }
-
 function readForm() {
   return {
     name:   field.name.value.trim() || DEFAULTS.name,
@@ -2585,21 +2488,16 @@ function readForm() {
     seed:   field.seed.value.trim() || DEFAULTS.seed,
   };
 }
-
 function writeForm(w) {
   field.name.value   = w.name;
   field.width.value  = w.width;
   field.height.value = w.height;
   field.seed.value   = w.seed;
 }
-
 function loadWorldCfg() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+  try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : null; }
+  catch { return null; }
 }
-
 function saveWorldCfg(w) { localStorage.setItem(STORAGE_KEY, JSON.stringify(w)); }
 
 const existing = loadWorldCfg();
@@ -2630,10 +2528,9 @@ $("w-play").addEventListener("click", () => {
     return;
   }
   els.welcome.hidden = true;
-  els.welcome.style.display = "none"; // belt and braces against future CSS
 });
 
-// ------------------------------------------------------------ input & routing
+// --------------------------------------------------------------- input
 
 const history = [];
 let histIdx = 0;
@@ -2642,7 +2539,6 @@ function submit(text) {
   if (!currentSession) return;
   const cmd = text.trim();
   if (!cmd) return;
-  appendLog(`> ${cmd}`, "prompt");
   history.push(cmd);
   histIdx = history.length;
   let result;
@@ -2650,10 +2546,10 @@ function submit(text) {
     result = currentSession.handleCommand(cmd);
   } catch (e) {
     console.error(e);
-    appendLog(`[internal error: ${e.message}]`, "bad");
+    appendFeedback(`[internal error: ${e.message}]`, "bad");
     return;
   }
-  for (const line of result.lines) appendLog(line, classify(line));
+  for (const line of result.lines) appendFeedback(line, classify(line));
   if (result.endedReason === "victory" || result.endedReason === "quit") {
     showEnded(result.endedReason);
   }
@@ -2674,15 +2570,11 @@ function showEnded(reason) {
 
 els.endedClose.addEventListener("click", () => { els.ended.hidden = true; });
 
-// ------------------------------------------------------------- click router
+// --------------------------------------------------------------- click router
 
 document.addEventListener("click", e => {
   const cmd = e.target.closest("[data-cmd]");
-  if (cmd) {
-    e.preventDefault();
-    submit(cmd.dataset.cmd);
-    return;
-  }
+  if (cmd) { e.preventDefault(); submit(cmd.dataset.cmd); return; }
   const open = e.target.closest("[data-open]");
   if (open) {
     e.preventDefault();
@@ -2696,11 +2588,10 @@ document.addEventListener("click", e => {
   if (close) {
     const ov = close.closest(".overlay");
     if (ov) ov.hidden = true;
-    return;
   }
 });
 
-// ------------------------------------------------------------- escape key
+// --------------------------------------------------------------- escape
 
 document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
@@ -2711,37 +2602,60 @@ document.addEventListener("keydown", e => {
   }
 });
 
-// ------------------------------------------------------------- map & combine
+// --------------------------------------------------------------- status item use
 
-$("dev-wipe")?.addEventListener("click", () => {
-  localStorage.removeItem("pydventure.save");
-  localStorage.removeItem(STORAGE_KEY);
-  location.reload();
+els.status.addEventListener("dblclick", e => {
+  const slot = e.target.closest("[data-use]");
+  if (!slot) return;
+  e.preventDefault();
+  submit(`use ${slot.dataset.use}`);
 });
 
-$("dev-ended")?.addEventListener("click", () => { els.ended.hidden = false; });
+let statusPressTimer = null;
+els.status.addEventListener("pointerdown", e => {
+  const slot = e.target.closest("[data-use]");
+  if (!slot) return;
+  statusPressTimer = setTimeout(() => {
+    statusPressTimer = null;
+    submit(`use ${slot.dataset.use}`);
+  }, 500);
+});
+els.status.addEventListener("pointerup", () => {
+  if (statusPressTimer) { clearTimeout(statusPressTimer); statusPressTimer = null; }
+});
+els.status.addEventListener("pointercancel", () => {
+  if (statusPressTimer) { clearTimeout(statusPressTimer); statusPressTimer = null; }
+});
+els.status.addEventListener("pointerleave", () => {
+  if (statusPressTimer) { clearTimeout(statusPressTimer); statusPressTimer = null; }
+});
 
-// Combine: click item → place in next free slot
+// --------------------------------------------------------------- keyboard shortcuts
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  const map = { n: "move n", s: "move s", e: "move e", w: "move w", u: "move u", d: "move d" };
+  const cmd = map[e.key.toLowerCase()];
+  if (cmd && currentSession) { e.preventDefault(); submit(cmd); }
+});
+
+// --------------------------------------------------------------- combine
+
 els.combineInv.addEventListener("click", e => {
   const item = e.target.closest(".inv-item");
   if (!item) return;
   const name = item.dataset.item;
   if (!combineSlots.a) setSlot("a", name);
   else if (!combineSlots.b) setSlot("b", name);
-  else setSlot("a", name); // overwrite A if both filled
+  else setSlot("a", name);
 });
 
-// Combine: drag/drop
 els.combineInv.addEventListener("dragstart", e => {
   const item = e.target.closest(".inv-item");
   if (!item) return;
   e.dataTransfer.setData("text/plain", item.dataset.item);
   e.dataTransfer.effectAllowed = "copy";
 });
-document.querySelectorAll(".inv-item").forEach(el => el.setAttribute("draggable", "true"));
-new MutationObserver(() => {
-  els.combineInv.querySelectorAll(".inv-item").forEach(el => el.setAttribute("draggable", "true"));
-}).observe(els.combineInv, { childList: true });
 
 for (const slotEl of [els.slotA, els.slotB]) {
   slotEl.addEventListener("dragover", e => { e.preventDefault(); slotEl.classList.add("over"); });
@@ -2752,9 +2666,7 @@ for (const slotEl of [els.slotA, els.slotB]) {
     const item = e.dataTransfer.getData("text/plain");
     if (item) setSlot(slotEl.dataset.slot, item);
   });
-  slotEl.addEventListener("click", () => {
-    setSlot(slotEl.dataset.slot, null);
-  });
+  slotEl.addEventListener("click", () => setSlot(slotEl.dataset.slot, null));
 }
 
 els.combineGo.addEventListener("click", () => {
@@ -2765,16 +2677,16 @@ els.combineGo.addEventListener("click", () => {
   submit(cmd);
 });
 
-// ============================================================================
-// Small dev nicety: keyboard shortcuts for door keys when nothing focused
-// ============================================================================
+// --------------------------------------------------------------- dev
 
-document.addEventListener("keydown", e => {
-  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-  const map = { n: "move n", s: "move s", e: "move e", w: "move w", u: "move u", d: "move d" };
-  const cmd = map[e.key.toLowerCase()];
-  if (cmd && currentSession) { e.preventDefault(); submit(cmd); }
+$("dev-wipe").addEventListener("click", () => {
+  localStorage.removeItem("pydventure.save");
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
 });
+$("dev-ended").addEventListener("click", () => { els.ended.hidden = false; });
+
+console.log("pydventure loaded.");
 </script>
 </body>
 </html>
