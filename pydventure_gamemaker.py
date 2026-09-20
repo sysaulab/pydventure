@@ -35,28 +35,26 @@ ENEMIES = {
 
 DROPS = {
     # overworld blue tier — mostly wood, occasional rock
-    "octorok_blue": {"items": {"wood": [0, 2]}},
+    "octorok_blue": {"items": {"wood": [0, 1]}},
     "bat_blue":     {"items": {"wood": [0, 1]}},
-    "spider_blue":  {"items": {"wood": [1, 2]}},
-    "fan":          {"items": {"wood": [1, 2]}},
-    "rhinos":       {"items": {"wood": [1, 3], "rock": [0, 1]}},
-    "knight_blue":  {"items": {"wood": [1, 2], "rock": [0, 1]}},
+    "spider_blue":  {"items": {"wood": [0, 1]}},
+    "fan":          {"items": {"wood": [0, 1]}},
+    "rhinos":       {"items": {"wood": [0, 1], "rock": [0, 1]}},
+    "knight_blue":  {"items": {"wood": [0, 1], "rock": [0, 1]}},
     # overworld red tier — more wood, more rock
-    "octorok_red":  {"items": {"wood": [1, 2], "rock": [0, 1]}},
-    "bat_red":      {"items": {"wood": [1, 2]}},
-    "spider_red":   {"items": {"wood": [1, 3], "rock": [0, 1]}},
-    "fan_red":      {"items": {"wood": [2, 3], "rock": [0, 1], "bomb": [0, 1]}},
-    "rhinos_red":   {"items": {"wood": [2, 3], "rock": [1, 2], "bomb": [0, 1]}},
-    "knight_red":   {"items": {"wood": [1, 3], "rock": [1, 2], "bomb": [0, 1]}},
-    "ghosts":       {"items": {"wood": [1, 2], "rock": [1, 2], "bomb": [0, 1]}},
+    "octorok_red":  {"items": {"wood": [0, 2], "rock": [0, 1]}},
+    "bat_red":      {"items": {"wood": [0, 2]}},
+    "spider_red":   {"items": {"wood": [0, 2], "rock": [0, 1]}},
+    "fan_red":      {"items": {"wood": [0, 2], "rock": [0, 1], "bomb": [0, 1]}},
+    "rhinos_red":   {"items": {"wood": [0, 2], "rock": [1, 2], "bomb": [0, 1]}},
+    "knight_red":   {"items": {"wood": [0, 2], "rock": [1, 2], "bomb": [0, 1]}},
+    "ghosts":       {"items": {"wood": [0, 2], "rock": [1, 2], "bomb": [0, 1]}},
     # dungeon tier — wood-heavy, rock moderate, bombs for the walls
-    "stalfos":      {"items": {"wood": [1, 3], "rock": [0, 2], "bomb": [0, 1]}},
-    "darknut":      {"items": {"wood": [2, 3], "rock": [1, 2], "bomb": [0, 2]}},
-    "wizzrobe":     {"items": {"wood": [2, 4], "rock": [1, 3], "bomb": [1, 2]}},
-    "dragon":       {"items": {"wood": [3, 5], "rock": [2, 3],
-                               "bomb": [2, 3], "heart": [1, 1]}},
-    "dragon_red":   {"items": {"wood": [4, 6], "rock": [3, 5],
-                               "bomb": [3, 5], "heart": [1, 1]}},
+    "stalfos":      {"items": {"wood": [0, 1], "rock": [0, 2], "bomb": [0, 1]}},
+    "darknut":      {"items": {"wood": [0, 1], "rock": [0, 2], "bomb": [0, 2]}},
+    "wizzrobe":     {"items": {"wood": [0, 1], "rock": [0, 2], "bomb": [0, 2]}},
+    "dragon":       {"items": {"wood": [0, 1], "rock": [0, 2], "bomb": [0, 2], "heart": [1, 1]}},
+    "dragon_red":   {"items": {"wood": [0, 1], "rock": [0, 2], "bomb": [0, 2], "heart": [1, 1]}},
 }
 
 ITEMS = {

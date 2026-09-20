@@ -52,8 +52,8 @@ body {
     grid-template-areas: "scene status";
   }
 }
-.app > .scene-wrap { grid-area: scene; }
-.app > .status     { grid-area: status; }
+.app > .scene-wrap  { grid-area: scene; }
+.app > .status-area { grid-area: status; }
 
 /* ------------------------------------------------------------------ scene */
 
@@ -107,7 +107,7 @@ body {
   flex-direction: column;
   gap: 0.55em;
   padding: 0.9em 1em;
-  background: rgba(8, 12, 18, 0.88);
+  background: rgba(8, 12, 18, 0.5);
   border: 1px solid var(--edge);
   border-radius: 0.7em;
   overflow-y: auto;
@@ -196,14 +196,43 @@ body {
 
 /* ---------------------------------------------------------------- status */
 
+.status-area {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .status {
   display: flex; flex-wrap: wrap; gap: 0.5em;
   align-items: baseline;
+  min-height: 0;
   padding: 0.5em 0.9em;
   background: #0a1620;
   border-top: 1px solid var(--edge);
   font-weight: 600;
 }
+
+/* --- mini map: duplicate of the map overlay, docked below the status --- */
+
+.minimap {
+  flex: 0 0 auto;
+  height: min(22dvh, 190px);
+  min-height: 0;
+  padding: 0.35em 0.9em 0.5em;
+  background: #0a1620;
+  border-top: 1px solid var(--edge);
+  overflow: hidden;
+}
+#minimap-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--panel);
+  border-radius: 0.4rem;
+}
+
 @media (orientation: landscape) {
   .status {
     flex-direction: column;
@@ -215,8 +244,14 @@ body {
     font-size: 1.02em;
   }
   .status .sep { display: none; }
+
+  /* fill the rest of the right-hand column, map hugs the bottom */
+  .minimap {
+    flex: 1 1 auto;
+    height: auto;
+  }
 }
-.status .sep  { color: var(--edge); }
+
 .status .hp   { color: var(--good); }
 .status .hp.low { color: var(--bad); }
 .status .goal { color: var(--title); }
@@ -280,7 +315,7 @@ body {
 .combine-body {
   padding: var(--gap);
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);   /* was: auto auto minmax(0, 1fr) */
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: var(--gap);
   min-height: 0;
 }
@@ -570,7 +605,13 @@ body {
     </div>
   </main>
 
-  <footer class="status" id="status"></footer>
+  <footer class="status-area">
+    <div class="status" id="status"></div>
+    <div class="minimap">
+      <svg id="minimap-svg" viewBox="0 0 400 400"
+           preserveAspectRatio="xMidYMax meet" aria-label="Mini map"></svg>
+    </div>
+  </footer>
 
 </div>
 
@@ -673,39 +714,46 @@ body {
 // CONFIG
 // ============================================================================
 
-const SKILL_NAMES = new Set(["fight", "avoidance", "search"]);
-
 const ENEMIES = {
-  octorok_blue: { difficulty: 1  }, bat_blue:     { difficulty: 2  },
-  spider_blue:  { difficulty: 3  }, fan:          { difficulty: 5  },
-  rhinos:       { difficulty: 6  }, knight_blue:  { difficulty: 7  },
-  octorok_red:  { difficulty: 11 }, bat_red:      { difficulty: 12 },
-  spider_red:   { difficulty: 13 }, fan_red:      { difficulty: 15 },
-  rhinos_red:   { difficulty: 16 }, knight_red:   { difficulty: 17 },
-  ghosts:       { difficulty: 19 }, stalfos:      { difficulty: 20 },
-  darknut:      { difficulty: 24 }, wizzrobe:     { difficulty: 27 },
-  dragon:       { difficulty: 50 }, dragon_red:   { difficulty: 200 },
+  octorok_blue: { difficulty: 1  }, 
+  bat_blue:     { difficulty: 2  },
+  spider_blue:  { difficulty: 3  }, 
+  fan:          { difficulty: 5  },
+  rhinos:       { difficulty: 6  }, 
+  knight_blue:  { difficulty: 7  },
+  octorok_red:  { difficulty: 11 }, 
+  bat_red:      { difficulty: 12 },
+  spider_red:   { difficulty: 13 }, 
+  fan_red:      { difficulty: 15 },
+  rhinos_red:   { difficulty: 16 }, 
+  knight_red:   { difficulty: 17 },
+  ghosts:       { difficulty: 19 }, 
+  stalfos:      { difficulty: 20 },
+  darknut:      { difficulty: 24 }, 
+  wizzrobe:     { difficulty: 27 },
+  dragon:       { difficulty: 250 }, 
+  dragon_red:   { difficulty: 500 },
 };
 
 const DROPS = {
-  octorok_blue: { items: { wood: [0, 2] } },
+  octorok_blue: { items: { wood: [0, 1] } },
   bat_blue:     { items: { wood: [0, 1] } },
-  spider_blue:  { items: { wood: [1, 2] } },
-  fan:          { items: { wood: [1, 2] } },
-  rhinos:       { items: { wood: [1, 3], rock: [0, 1] } },
-  knight_blue:  { items: { wood: [1, 2], rock: [0, 1] } },
-  octorok_red:  { items: { wood: [1, 2], rock: [0, 1] } },
-  bat_red:      { items: { wood: [1, 2] } },
-  spider_red:   { items: { wood: [1, 3], rock: [0, 1] } },
-  fan_red:      { items: { wood: [2, 3], rock: [0, 1], bomb: [0, 1] } },
-  rhinos_red:   { items: { wood: [2, 3], rock: [1, 2], bomb: [0, 1] } },
-  knight_red:   { items: { wood: [1, 3], rock: [1, 2], bomb: [0, 1] } },
-  ghosts:       { items: { wood: [1, 2], rock: [1, 2], bomb: [0, 1] } },
-  stalfos:      { items: { wood: [1, 3], rock: [0, 2], bomb: [0, 1] } },
-  darknut:      { items: { wood: [2, 3], rock: [1, 2], bomb: [0, 2] } },
-  wizzrobe:     { items: { wood: [2, 4], rock: [1, 3], bomb: [1, 2] } },
-  dragon:       { items: { wood: [3, 5], rock: [2, 3], bomb: [2, 3], heart: [1, 1] } },
-  dragon_red:   { items: { wood: [4, 6], rock: [3, 5], bomb: [3, 5], heart: [1, 1] } },
+  spider_blue:  { items: { wood: [0, 1] } },
+  fan:          { items: { wood: [0, 1] } },
+  rhinos:       { items: { wood: [0, 1], rock: [0, 1] } },
+  knight_blue:  { items: { wood: [0, 1], rock: [0, 1] } },
+  octorok_red:  { items: { wood: [0, 1], rock: [0, 1] } },
+  bat_red:      { items: { wood: [0, 1] } },
+  spider_red:   { items: { wood: [0, 1], rock: [0, 1] } },
+  fan_red:      { items: { wood: [0, 1], rock: [0, 1], bomb: [0, 1] } },
+  rhinos_red:   { items: { wood: [0, 1], rock: [0, 1], bomb: [0, 1] } },
+  knight_red:   { items: { wood: [0, 1], rock: [0, 1], bomb: [0, 1] } },
+  ghosts:       { items: { wood: [0, 1], rock: [0, 1], bomb: [0, 1] } },
+  stalfos:      { items: { wood: [0, 1], rock: [0, 1], bomb: [0, 1] } },
+  darknut:      { items: { wood: [0, 1], rock: [0, 1], bomb: [0, 1] } },
+  wizzrobe:     { items: { wood: [0, 1], rock: [0, 1], bomb: [0, 1] } },
+  dragon:       { items: { wood: [0, 1], rock: [0, 1], bomb: [0, 1], heart: [1, 1] } },
+  dragon_red:   { items: { wood: [0, 1], rock: [0, 1], bomb: [0, 1], heart: [1, 1] } },
 };
 
 const RECIPES = [
@@ -721,6 +769,7 @@ const RECIPES = [
 const TERRAINS = {
   plains:      { kind: "overworld", floors: [1], weight: 4, description: "an arid plain, cracked and dry",           enemies: ["octorok_blue", "octorok_red"] },
   forest:      { kind: "overworld", floors: [1], weight: 3, description: "a dense forest, the canopy closing overhead", enemies: ["spider_blue", "bat_blue", "spider_red"] },
+  desert:      { kind: "overworld", floors: [1], weight: 2, description: "a wind-scoured desert, sand drifting over the stones", enemies: ["fan", "fan_red"] },
   dead_plain:  { kind: "overworld", floors: [1], weight: 2, description: "a dead plain, the soil grey and lifeless",  enemies: ["knight_blue", "knight_red"] },
   cemetery:    { kind: "overworld", floors: [1], weight: 1, description: "a dried lake bed littered with tombs",       enemies: ["ghosts"] },
   valley:      { kind: "overworld", floors: [1], weight: 1, description: "a rocky valley, boulders strewn across the ground", enemies: ["rhinos", "rhinos_red"] },
@@ -736,6 +785,7 @@ const TERRAINS = {
 const TERRAIN_RESOURCES = {
   plains:      [["rock", 1], ["wood", 1]],
   forest:      [["wood", 4], ["rock", 1]],
+  desert:      [["rock", 2]],
   dead_plain:  [["rock", 3], ["wood", 1]],
   cemetery:    [["rock", 2]],
   valley:      [["rock", 3], ["wood", 1]],
@@ -787,6 +837,10 @@ const DIRS = ["N", "E", "S", "W"];
 const DELTA = { N: [0, 1], S: [0, -1], E: [1, 0], W: [-1, 0], U: [0, 0, 1], D: [0, 0, -1] };
 const OPPOSITE = { N: "S", S: "N", E: "W", W: "E", U: "D", D: "U" };
 const DIR_NAMES = { N: "north", E: "east", S: "south", W: "west", U: "up", D: "down" };
+
+const FIRE_MIN_DAMAGE = 10;
+const FIRE_MAX_DAMAGE = 20;
+const MAX_ITEM_COUNT  = 10;
 
 // ============================================================================
 // RNG
@@ -955,7 +1009,6 @@ class Level {
     this.assignTerrain();
     if (this.kind === "overworld") {
       this.placeStairs();
-      this.placeShops();
       this.placeLooseItems();
       this.clearStart();
     } else if (this.kind === "dungeon") {
@@ -1021,18 +1074,6 @@ class Level {
       (this.features[this.key(x, y, zLo)] ||= []).push("stairs_up");
       (this.features[this.key(x, y, zHi)] ||= []).push("stairs_down");
       placed++;
-    }
-  }
-
-  placeShops() {
-    for (const shop of this.cfg.features?.shops ?? []) {
-      const z = shop.floor ?? 0;
-      if (z >= this.depth) continue;
-      const cells = this.emptyCells(z);
-      if (!cells.length) continue;
-      const [x, y] = cells[0];
-      (this.features[this.key(x, y, z)] ||= []).push("shop");
-      (this.items[this.key(x, y, z)] ||= []).push(...(shop.items || []));
     }
   }
 
@@ -1239,24 +1280,12 @@ class Level {
 
 function parseRequirement(text) {
   const m = String(text).trim().match(/^(.+?)-(\d+)$/);
-  if (m) {
-    const name = m[1].trim();
-    const consume = parseInt(m[2], 10);
-    return { name, consume, kind: SKILL_NAMES.has(name) ? "skill" : (consume > 0 ? "consumable" : "item") };
-  }
-  const name = String(text).trim();
-  return { name, consume: 0, kind: SKILL_NAMES.has(name) ? "skill" : "item" };
+  if (m) return { name: m[1].trim(), consume: parseInt(m[2], 10) };
+  return { name: String(text).trim(), consume: 0 };
 }
 
 function parseItemSpec(spec) {
   let s = String(spec);
-  let price = null;
-  const atIdx = s.lastIndexOf("@");
-  if (atIdx >= 0) {
-    const p = parseInt(s.slice(atIdx + 1), 10);
-    if (!Number.isNaN(p)) price = p;
-    s = s.slice(0, atIdx);
-  }
   let count = 1;
   const plusIdx = s.indexOf("+");
   if (plusIdx >= 0) {
@@ -1264,54 +1293,59 @@ function parseItemSpec(spec) {
     if (!Number.isNaN(c)) count = 1 + c;
     s = s.slice(0, plusIdx);
   }
-  return { name: s.trim(), count, price, requirements: [] };
+  return { name: s.trim(), count };
 }
 
 function parseTeleport(text) {
   const s = String(text).replace(/^</, "").replace(/>$/, "");
   const [mapName, coords] = s.split(":");
-  const [x, y, z, entrance] = coords.split(",");
+  const [x, y, z] = coords.split(",");
   return {
     map: mapName.trim(),
     x: parseInt(x, 10), y: parseInt(y, 10), z: parseInt(z, 10),
-    entranceDir: entrance.trim(),
   };
+}
+
+function enemyMaxHp(name) {
+  return ENEMIES[name]?.difficulty ?? 1;
 }
 
 function buildRoom(level, x, y, z) {
   const k = level.key(x, y, z);
   const m = level.floors[z];
-  const zone = { doors: {}, enemies: [], items: [] };
+  const doors = {};
 
   for (const d of "NESW") {
     if (m.walls[`${x},${y}`][d]) continue;
-    const door = { reach: null, pass: [], teleport: null };
+    const door = { pass: [], teleport: null };
     const req = level.doorReqs[`${x},${y},${z},${d}`];
     if (req) door.pass.push(parseRequirement(req));
-    zone.doors[d] = door;
+    doors[d] = door;
   }
   for (const d of "UD") {
     const tp = level.teleports[`${x},${y},${z},${d}`];
     if (tp) {
-      zone.doors[d] = { reach: null, pass: [], teleport: parseTeleport(tp) };
+      doors[d] = { pass: [], teleport: parseTeleport(tp) };
     } else {
       const feats = level.features[k] || [];
       const key = d === "U" ? "stairs_up" : "stairs_down";
-      if (feats.includes(key)) zone.doors[d] = { reach: null, pass: [], teleport: null };
+      if (feats.includes(key)) doors[d] = { pass: [], teleport: null };
     }
   }
 
-  const enemyList = level.enemies[k] || [];
-  const counts = {};
-  for (const name of enemyList) counts[name] = (counts[name] || 0) + 1;
-  zone.enemies = Object.entries(counts).map(([name, count]) => [name, count]);
+  const enemies = (level.enemies[k] || []).map(name => ({
+    name, hp: enemyMaxHp(name),
+  }));
 
-  for (const spec of level.items[k] || []) zone.items.push(parseItemSpec(spec));
+  const items = [];
+  for (const spec of level.items[k] || []) items.push(parseItemSpec(spec));
 
   return {
     map: level.name, x, y, z,
     description: level.descriptions[k] || "",
-    zones: [zone],
+    doors,
+    enemies,
+    items,
   };
 }
 
@@ -1352,14 +1386,8 @@ class World {
       if (!cell) continue;
       used.add(`${cell[0]},${cell[1]}`);
       const [ox, oy] = cell;
-      const dm = lvl.floors[0];
-      const dmExits = dm.exits(0, 0);
-      if (!dmExits.length) continue;
-      const entryDir = dmExits[0];
-      const owExits = m.exits(ox, oy);
-      const backDir = owExits.length ? owExits[0] : "N";
-      ow.setTeleport(ox, oy, 0, "D", `<${name}:0,0,0,${entryDir}>`);
-      lvl.setTeleport(0, 0, 0, "U", `<overworld:${ox},${oy},0,${backDir}>`);
+      ow.setTeleport(ox, oy, 0, "D", `<${name}:0,0,0>`);
+      lvl.setTeleport(0, 0, 0, "U", `<overworld:${ox},${oy},0>`);
     }
   }
   buildRooms() {
@@ -1386,22 +1414,30 @@ class World {
 class Player {
   constructor(data = {}) {
     this.inventory  = data.inventory  ? { ...data.inventory }  : {};
-    this.skills     = data.skills     ? { ...data.skills }     : { fight: 0, avoidance: 0, search: 0 };
+    this.skills     = data.skills     ? { ...data.skills }     : { fight: 0, avoidance: 0 };
     this.map        = data.map        ?? "overworld";
     this.x          = data.x          ?? 0;
     this.y          = data.y          ?? 0;
     this.z          = data.z          ?? 1;
-    this.zone       = data.zone       ?? 0;
     this.swordLevel = data.swordLevel ?? 0;
-    this.coins      = data.coins      ?? 0;
     this.won        = data.won        ?? false;
     this.hp         = data.hp         ?? 5;
     this.maxHp      = data.maxHp      ?? 5;
   }
   takeDamage(n) { this.hp = Math.max(0, this.hp - n); }
   healFull() { this.hp = this.maxHp; }
-  addItem(name, count = 1) { this.inventory[name] = (this.inventory[name] || 0) + count; }
+
+  // Returns the number actually added (may be less than `count` when capped).
+  addItem(name, count = 1) {
+    if (count <= 0) return 0;
+    const have = this.inventory[name] || 0;
+    const room = MAX_ITEM_COUNT - have;
+    const added = Math.max(0, Math.min(count, room));
+    if (added > 0) this.inventory[name] = have + added;
+    return added;
+  }
   removeItem(name, count = 1) {
+    if (count <= 0) return true;
     if ((this.inventory[name] || 0) >= count) {
       this.inventory[name] -= count;
       if (this.inventory[name] === 0) delete this.inventory[name];
@@ -1410,15 +1446,23 @@ class Player {
     return false;
   }
   hasItem(name, count = 1) { return (this.inventory[name] || 0) >= count; }
+  isFullOf(name) {
+    if (name === "sword") return false;   // sword level is not inventory
+    return (this.inventory[name] || 0) >= MAX_ITEM_COUNT;
+  }
   getSkill(s) { return this.skills[s] || 0; }
   increaseSkill(s) { this.skills[s] = (this.skills[s] || 0) + 1; }
-  spendCoins(n) { if (this.coins >= n) { this.coins -= n; return true; } return false; }
-  grant(name, count = 1) { if (name === "sword") this.swordLevel += 1; else this.addItem(name, count); }
+
+  // Returns the number actually granted.
+  grant(name, count = 1) {
+    if (name === "sword") { this.swordLevel += count; return count; }
+    return this.addItem(name, count);
+  }
   toJSON() {
     return {
       inventory: this.inventory, skills: this.skills,
-      map: this.map, x: this.x, y: this.y, z: this.z, zone: this.zone,
-      swordLevel: this.swordLevel, coins: this.coins, won: this.won,
+      map: this.map, x: this.x, y: this.y, z: this.z,
+      swordLevel: this.swordLevel, won: this.won,
       hp: this.hp, maxHp: this.maxHp,
     };
   }
@@ -1433,126 +1477,42 @@ class RoomState {
   constructor(room, player) {
     this.room = room;
     this.player = player;
-    this.currentZone = (player.zone >= 0 && player.zone < room.zones.length) ? player.zone : 0;
-    this.zoneCleared = room.zones.map(() => false);
   }
-  zoneEntryRequirement(idx) {
-    const z = this.room.zones[idx];
-    const dirs = Object.keys(z.doors);
-    if (!dirs.length) return null;
-    return z.doors[dirs[0]].reach;
-  }
-  canEnterZone(idx) {
-    if (idx < 0 || idx >= this.room.zones.length) return false;
-    if (idx === this.currentZone) return true;
-    const req = this.zoneEntryRequirement(idx);
-    if (!req) return true;
-    if (req.kind === "consumable") return this.player.hasItem(req.name, req.consume);
-    if (req.kind === "skill") return this.player.getSkill(req.name) > 0;
-    return this.player.hasItem(req.name);
-  }
-  enterZone(idx) {
-    if (!this.canEnterZone(idx)) return false;
-    const req = this.zoneEntryRequirement(idx);
-    if (req) {
-      if (req.kind === "consumable") {
-        this.player.removeItem(req.name, req.consume);
-        const z = this.room.zones[idx];
-        const dirs = Object.keys(z.doors);
-        if (dirs.length) z.doors[dirs[0]].reach = null;
-      } else if (req.kind === "skill") this.player.increaseSkill(req.name);
-    }
-    this.currentZone = idx;
-    this.player.zone = idx;
-    return true;
-  }
-  currentDoors() { return this.room.zones[this.currentZone].doors; }
-  isDoorVisible(dir) {
-    const di = this.currentDoors()[dir];
-    if (!di) return false;
-    if (di.pass.length && di.pass[0].name === "search") return false;
-    return true;
-  }
-  isItemVisible(name) {
-    for (const item of this.room.zones[this.currentZone].items)
-      if (item.name === name) {
-        if (item.requirements.length && item.requirements[0].name === "search") return false;
-        return true;
-      }
-    return false;
-  }
+  isDoorVisible(dir) { return !!this.room.doors[dir]; }
   canUseDoor(dir) {
-    if (!this.isDoorVisible(dir)) return false;
-    const di = this.currentDoors()[dir];
+    const di = this.room.doors[dir];
+    if (!di) return false;
     if (!di.pass.length) return true;
     const req = di.pass[0];
-    if (req.kind === "consumable") return this.player.hasItem(req.name, req.consume);
-    if (req.kind === "skill") return this.player.getSkill(req.name) > 0;
-    return this.player.hasItem(req.name);
+    return this.player.hasItem(req.name, req.consume);
   }
   useDoor(dir) {
     if (!this.canUseDoor(dir)) return false;
-    const di = this.currentDoors()[dir];
+    const di = this.room.doors[dir];
     if (di.pass.length) {
       const req = di.pass[0];
-      if (req.kind === "consumable") {
-        if (!this.player.hasItem(req.name, req.consume)) return false;
-        this.player.removeItem(req.name, req.consume);
-      } else if (req.kind === "skill") {
-        if (this.player.getSkill(req.name) <= 0) return false;
-        this.player.increaseSkill(req.name);
-      } else {
-        if (!this.player.hasItem(req.name)) return false;
-      }
+      if (req.consume > 0 && !this.player.removeItem(req.name, req.consume))
+        return false;
       di.pass.shift();
     }
     return true;
   }
-  searchZone(dir = null) {
-    const revealed = [];
-    if (dir) {
-      const di = this.currentDoors()[dir];
-      if (di && di.pass.length && di.pass[0].name === "search") {
-        di.pass.shift();
-        revealed.push(`Door ${dir}`);
-      }
-    } else {
-      for (const [d, di] of Object.entries(this.currentDoors()))
-        if (di.pass.length && di.pass[0].name === "search") {
-          di.pass.shift();
-          revealed.push(`Door ${d}`);
-        }
-      for (const item of this.room.zones[this.currentZone].items)
-        if (item.requirements.length && item.requirements[0].name === "search") {
-          item.requirements.shift();
-          revealed.push(`Item ${item.name}`);
-        }
-    }
-    this.player.increaseSkill("search");
-    if (revealed.length) return { ok: true, msg: "You search and discover: " + revealed.join(", ") };
-    return { ok: true, msg: "You search but find nothing new." };
-  }
-  currentEnemies() {
-    if (this.zoneCleared[this.currentZone]) return [];
-    return this.room.zones[this.currentZone].enemies;
-  }
+  currentEnemies() { return this.room.enemies; }
   enemyPower(enemies) {
     let t = 0;
-    for (const [name, count] of enemies) t += (ENEMIES[name]?.difficulty ?? 1) * count;
+    for (const e of enemies) t += Math.max(0, e.hp);
     return t;
   }
   rollDrops(enemies) {
     const totals = {};
-    for (const [name, count] of enemies) {
-      const items = (DROPS[name] || {}).items || {};
-      if (!Object.keys(items).length) continue;
-      for (let i = 0; i < count; i++)
-        for (const [iname, irange] of Object.entries(items)) {
-          const n = Array.isArray(irange)
-            ? Math.floor(Math.random() * (irange[1] - irange[0] + 1)) + irange[0]
-            : irange;
-          if (n) totals[iname] = (totals[iname] || 0) + n;
-        }
+    for (const e of enemies) {
+      const items = (DROPS[e.name] || {}).items || {};
+      for (const [iname, irange] of Object.entries(items)) {
+        const n = Array.isArray(irange)
+          ? Math.floor(Math.random() * (irange[1] - irange[0] + 1)) + irange[0]
+          : irange;
+        if (n) totals[iname] = (totals[iname] || 0) + n;
+      }
     }
     return totals;
   }
@@ -1570,19 +1530,20 @@ class RoomState {
     }
     this.player.increaseSkill("fight");
     const loot = this.rollDrops(enemies);
-    this.zoneCleared[this.currentZone] = true;
-    this.room.zones[this.currentZone].enemies = [];
+    this.room.enemies = [];
     let msg = `You defeat the enemies! (you ${roll} vs them ${enemyRoll}; FP ${pool} vs EP ${ep})`;
     const keys = Object.keys(loot).sort();
-    if (keys.length) {
-      const parts = [];
-      for (const iname of keys) {
-        const n = loot[iname];
-        this.player.grant(iname, n);
-        parts.push(n === 1 ? iname : `${iname} x${n}`);
-      }
-      msg += " You collect " + parts.join(", ") + ".";
+    const taken = [];
+    const spilled = [];
+    for (const iname of keys) {
+      const n = loot[iname];
+      const got = this.player.grant(iname, n);
+      if (got > 0) taken.push(got === 1 ? iname : `${iname} x${got}`);
+      if (got < n) spilled.push(n - got === 1 ? iname : `${iname} x${n - got}`);
     }
+    if (taken.length) msg += " You collect " + taken.join(", ") + ".";
+    if (spilled.length)
+      msg += ` You leave ${spilled.join(", ")} behind — no room to carry it.`;
     return { ok: true, msg };
   }
   avoidEnemies(combat) {
@@ -1600,68 +1561,34 @@ class RoomState {
     this.player.increaseSkill("avoidance");
     return { ok: true, msg: `You slip past the enemies! (you ${roll} vs them ${enemyRoll}; AP ${pool} vs EP ${ep})` };
   }
-  clearWithFire() {
-    const enemies = this.currentEnemies();
+  throwFire() {
+    const enemies = this.room.enemies;
     if (!enemies.length) return { ok: false, msg: "No enemies here." };
-    this.zoneCleared[this.currentZone] = true;
-    this.room.zones[this.currentZone].enemies = [];
-    this.player.increaseSkill("avoidance");
-    return { ok: true, msg: "You hurl the fire. It flares, and the enemies scatter into the dark. You slip through unseen. (avoidance +1)" };
-  }
-  currentItems() {
-    return this.room.zones[this.currentZone].items.filter(it => this.isItemVisible(it.name));
-  }
-  consumeRequirement(item) {
-    if (!item.requirements.length) return { ok: true, msg: null };
-    const req = item.requirements[0];
-    if (req.kind === "consumable") {
-      if (!this.player.hasItem(req.name, req.consume)) return { ok: false, msg: `You need ${req.name}.` };
-      this.player.removeItem(req.name, req.consume);
-    } else if (req.kind === "skill") {
-      if (this.player.getSkill(req.name) <= 0) return { ok: false, msg: `You need ${req.name} skill.` };
-      this.player.increaseSkill(req.name);
-    } else {
-      if (!this.player.hasItem(req.name)) return { ok: false, msg: `You need ${req.name}.` };
+    const target = enemies[0];
+    const dmg = Math.floor(Math.random() * (FIRE_MAX_DAMAGE - FIRE_MIN_DAMAGE + 1)) + FIRE_MIN_DAMAGE;
+    target.hp -= dmg;
+    if (target.hp <= 0) {
+      enemies.shift();
+      return { ok: true, msg: `You hurl the fire at the ${target.name}. It takes ${dmg} damage and falls.` };
     }
-    item.requirements.shift();
-    return { ok: true, msg: `You uncover the ${item.name}.` };
+    return { ok: true, msg: `You hurl the fire at the ${target.name}. It takes ${dmg} damage (${target.hp} HP left).` };
   }
-  findItem(name) {
-    const items = this.room.zones[this.currentZone].items;
-    for (let i = 0; i < items.length; i++)
-      if (items[i].name === name) return { i, item: items[i] };
-    return { i: -1, item: null };
-  }
+  currentItems() { return this.room.items; }
   takeItem(name) {
-    if (!this.isItemVisible(name)) return { ok: false, msg: "You don't see that here." };
-    const { i, item } = this.findItem(name);
-    if (!item) return { ok: false, msg: "That item is not here." };
-    if (item.price !== null) return { ok: false, msg: `The ${item.name} is for sale (${item.price} coins). Try 'buy ${item.name}'.` };
-    const res = this.consumeRequirement(item);
-    if (!res.ok) return res;
-    if (res.msg) return res;
-    this.room.zones[this.currentZone].items.splice(i, 1);
-    this.player.grant(item.name, item.count);
-    return { ok: true, msg: `You take ${item.name} x${item.count}.` };
-  }
-  buyItem(name) {
-    if (!this.isItemVisible(name)) return { ok: false, msg: "You don't see that here." };
-    const { i, item } = this.findItem(name);
-    if (!item) return { ok: false, msg: "That item is not here." };
-    if (item.price === null) return { ok: false, msg: `The ${item.name} isn't for sale.` };
-    const res = this.consumeRequirement(item);
-    if (!res.ok) return res;
-    if (res.msg) return res;
-    if (!this.player.spendCoins(item.price))
-      return { ok: false, msg: `You need ${item.price} coins (you have ${this.player.coins}).` };
-    if (item.count > 1) {
-      item.count -= 1;
-      this.player.grant(item.name, 1);
-      return { ok: true, msg: `You buy ${item.name} for ${item.price} coins. (${item.count} remaining)` };
+    const items = this.room.items;
+    const i = items.findIndex(it => it.name === name);
+    if (i < 0) return { ok: false, msg: "That item is not here." };
+    const item = items[i];
+    if (this.player.isFullOf(item.name)) {
+      return { ok: false, msg: `You can't carry any more ${item.name} (max ${MAX_ITEM_COUNT}).` };
     }
-    this.room.zones[this.currentZone].items.splice(i, 1);
-    this.player.grant(item.name, 1);
-    return { ok: true, msg: `You buy ${item.name} for ${item.price} coins.` };
+    const got = this.player.addItem(item.name, item.count);
+    if (got < item.count) {
+      item.count -= got;
+      return { ok: true, msg: `You take ${item.name} x${got}. You leave ${item.count} behind — no room to carry more.` };
+    }
+    items.splice(i, 1);
+    return { ok: true, msg: `You take ${item.name} x${got}.` };
   }
 }
 
@@ -1676,7 +1603,6 @@ class Session {
     this.combat = opts.combat || world.config.combat;
     this.goal = opts.goal || world.config.goal;
     this.deltas = opts.deltas || {};
-    this.lastMoveDir = opts.lastMoveDir || null;
     this.roomState = null;
     this.loadCurrentRoom();
   }
@@ -1692,11 +1618,6 @@ class Session {
     }
     this.roomState = new RoomState(room, this.player);
   }
-  findZoneForEntrance(room, dir) {
-    for (let i = 0; i < room.zones.length; i++)
-      if (room.zones[i].doors[dir]) return i;
-    return 0;
-  }
   neighborCoords(dir) {
     const [dx, dy, dz] = DELTA[dir] || [0, 0, 0];
     return [this.player.x + dx, this.player.y + dy, this.player.z + dz];
@@ -1710,13 +1631,8 @@ class Session {
       room = JSON.parse(JSON.stringify(pristine));
       this.deltas[key] = room;
     }
-    for (const zone of room.zones) {
-      const di = zone.doors[dir];
-      if (di && di.pass.length && di.pass[0].name === reqName) {
-        di.pass.shift();
-        return;
-      }
-    }
+    const di = room.doors[dir];
+    if (di && di.pass.length && di.pass[0].name === reqName) di.pass.shift();
   }
   enemyBlock(emit) {
     if (!this.roomState) return true;
@@ -1724,7 +1640,7 @@ class Session {
     if (!enemies.length) return true;
     const res = this.roomState.avoidEnemies(this.combat);
     if (!res.ok) { emit(`Enemies block your way! ${res.msg}`); return false; }
-    emit(`You slip past the enemies! ${res.msg}`);
+    emit(res.msg);
     return true;
   }
   moveThroughDoor(dir) {
@@ -1735,17 +1651,17 @@ class Session {
     if (!rs.isDoorVisible(dir))
       return { ok: false, msg: "There is no door in that direction." };
     if (!rs.canUseDoor(dir)) {
-      const di = rs.currentDoors()[dir];
+      const di = rs.room.doors[dir];
       if (!di) return { ok: false, msg: "No door there." };
       if (di.pass.length) return { ok: false, msg: `You need ${di.pass[0].name}.` };
       return { ok: false, msg: "Cannot go that way." };
     }
-    const diPre = rs.currentDoors()[dir];
+    const diPre = rs.room.doors[dir];
     let consumedReq = null;
-    if (diPre.pass.length && diPre.pass[0].kind === "consumable")
+    if (diPre.pass.length && diPre.pass[0].consume > 0)
       consumedReq = diPre.pass[0].name;
     if (!rs.useDoor(dir)) return { ok: false, msg: "Failed to use door." };
-    const di = rs.currentDoors()[dir];
+    const di = rs.room.doors[dir];
     const oldMap = this.player.map, oldX = this.player.x, oldY = this.player.y, oldZ = this.player.z;
     if (di && di.teleport) {
       const t = di.teleport;
@@ -1755,9 +1671,7 @@ class Session {
       if (!targetRoom) return { ok: false, msg: "Destination doesn't exist." };
       this.player.map = t.map;
       this.player.x = t.x; this.player.y = t.y; this.player.z = t.z;
-      this.player.zone = this.findZoneForEntrance(targetRoom, t.entranceDir);
       this.loadCurrentRoom();
-      this.lastMoveDir = dir;
       return { ok: true, msg: `Teleported to ${t.map} (${t.x},${t.y},${t.z}).` };
     }
     let dx = 0, dy = 0, dz = 0;
@@ -1774,20 +1688,18 @@ class Session {
     if (consumedReq)
       this.unlockNeighbor(oldMap, nx, ny, nz, OPPOSITE[dir], consumedReq);
     this.player.x = nx; this.player.y = ny; this.player.z = nz;
-    this.player.zone = 0;
     this.loadCurrentRoom();
-    this.lastMoveDir = dir;
     return { ok: true, msg: `You move ${dir}.` };
   }
   openDoorWithItem(dir, itemName) {
     const rs = this.roomState;
     if (!rs) return { ok: false, msg: "No room." };
-    const di = rs.currentDoors()[dir];
+    const di = rs.room.doors[dir];
     if (!di) return { ok: false, msg: `No door ${dir}.` };
     if (!(di.pass.length && di.pass[0].name === itemName))
       return { ok: false, msg: `${dir} door doesn't need ${itemName}.` };
     const req = di.pass[0];
-    const consumed = req.kind === "consumable";
+    const consumed = req.consume > 0;
     if (!rs.useDoor(dir)) return { ok: false, msg: "Cannot use that." };
     if (consumed) {
       const [nx, ny, nz] = this.neighborCoords(dir);
@@ -1804,7 +1716,7 @@ class Session {
       if (dir) return { ok: false, msg: "Fire doesn't take a direction." };
       if (!this.player.hasItem(fireItem)) return { ok: false, msg: `You have no ${fireItem}.` };
       if (!this.roomState) return { ok: false, msg: "No room." };
-      const res = this.roomState.clearWithFire();
+      const res = this.roomState.throwFire();
       if (res.ok) this.player.removeItem(fireItem, 1);
       return res;
     }
@@ -1825,10 +1737,9 @@ class Session {
     const rs = this.roomState;
     if (item === "fight")     return rs.fightEnemies(this.combat);
     if (item === "avoidance") return rs.avoidEnemies(this.combat);
-    if (item === "search")    return rs.searchZone(dir);
     if (dir) return this.openDoorWithItem(dir, item);
     const candidates = [];
-    for (const [d, di] of Object.entries(rs.currentDoors()))
+    for (const [d, di] of Object.entries(rs.room.doors))
       if (di.pass.length && di.pass[0].name === item) candidates.push(d);
     if (!candidates.length) return { ok: false, msg: `No door requires ${item}.` };
     if (candidates.length > 1) return { ok: false, msg: `Multiple doors require ${item}; specify direction.` };
@@ -1837,10 +1748,6 @@ class Session {
   takeItem(name) {
     if (!this.roomState) return { ok: false, msg: "No room." };
     return this.roomState.takeItem(name);
-  }
-  buyItem(name) {
-    if (!this.roomState) return { ok: false, msg: "No room." };
-    return this.roomState.buyItem(name);
   }
   findRecipe(inputs) {
     const sig = Object.entries(inputs).sort().map(([k, v]) => `${k}:${v}`).join("|");
@@ -1858,9 +1765,11 @@ class Session {
     for (const [name, count] of Object.entries(inputs))
       if (!this.player.hasItem(name, count))
         return { ok: false, msg: `You need ${count} ${name}.` };
+    const out = recipe.output;
+    if (this.player.isFullOf(out.item))
+      return { ok: false, msg: `You can't carry any more ${out.item} (max ${MAX_ITEM_COUNT}). Use some before you craft more.` };
     for (const [name, count] of Object.entries(inputs))
       this.player.removeItem(name, count);
-    const out = recipe.output;
     const outCount = out.count || 1;
     this.player.grant(out.item, outCount);
     if (outCount > 1) return { ok: true, msg: `You combine ${pretty} into ${out.item} x${outCount}.` };
@@ -1868,23 +1777,14 @@ class Session {
   }
   checkDeath(emit) {
     if (this.player.hp > 0) return;
-    const cfg = this.combat.death;
     emit("You collapse.");
-    if (cfg.restore_hp) this.player.healFull();
-    const frac = cfg.coin_loss_fraction;
-    if (frac > 0 && this.player.coins > 0) {
-      const lost = Math.floor(this.player.coins * frac);
-      this.player.coins -= lost;
-      emit(`You wake at the entrance. You lost ${lost} coins.`);
-    } else {
-      emit("You wake at the entrance.");
-    }
+    if (this.combat.death.restore_hp) this.player.healFull();
+    emit("You wake at the entrance.");
     if (this.player.map === "overworld") {
       this.player.x = 0; this.player.y = 0; this.player.z = 1;
     } else {
       this.player.x = 0; this.player.y = 0; this.player.z = 0;
     }
-    this.player.zone = 0;
     this.loadCurrentRoom();
   }
   handleCommand(cmd) {
@@ -1903,27 +1803,11 @@ class Session {
                  || (action === "use" && ["avoidance", "flee", "avoid"].includes(parts[1]));
     const isHeal  = action === "use" && [heartItem, shelterItem].includes(parts[1]);
     const isFire  = action === "use" && parts[1] === fireItem;
-    const isMeta  = ["save", "quit", "exit", "reset", "retreat"].includes(action) || isHeal || isFire;
+    const isMeta  = isHeal || isFire;
     if (!isFight && !isFlee && !isMeta) {
       if (!this.enemyBlock(emit)) { this.checkDeath(emit); return { lines: out, endedReason }; }
     }
-    if (action === "quit" || action === "exit") {
-      this.save();
-      emit("Saved. Bye!");
-      endedReason = "quit";
-    } else if (action === "save") {
-      this.save();
-      emit("Saved.");
-    } else if (action === "reset") {
-      emit("Reset not supported in the browser.");
-    } else if (action === "retreat") {
-      if (!this.lastMoveDir) emit("You can't retreat; you haven't moved yet.");
-      else {
-        const back = OPPOSITE[this.lastMoveDir];
-        const r = this.moveThroughDoor(back);
-        emit(`You retreat. ${r.msg}`);
-      }
-    } else if (action === "move") {
+    if (action === "move") {
       if (parts.length < 2) { emit("Move where?"); this.checkDeath(emit); return { lines: out, endedReason }; }
       const r = this.moveThroughDoor(parts[1].toUpperCase());
       emit(r.msg);
@@ -1960,15 +1844,6 @@ class Session {
           endedReason = "victory";
         }
       }
-    } else if (action === "buy") {
-      if (parts.length < 2) { emit("Buy what?"); this.checkDeath(emit); return { lines: out, endedReason }; }
-      const r = this.buyItem(parts[1]); emit(r.msg);
-    } else if (action === "enter") {
-      if (parts.length < 2) { emit("Enter which zone?"); this.checkDeath(emit); return { lines: out, endedReason }; }
-      const z = parseInt(parts[1], 10) - 1;
-      if (Number.isNaN(z)) { emit("Invalid zone."); this.checkDeath(emit); return { lines: out, endedReason }; }
-      if (this.roomState && this.roomState.enterZone(z)) emit(`Moved to zone ${z + 1}.`);
-      else emit("Cannot enter that zone.");
     } else {
       emit("Unknown command.");
     }
@@ -1978,11 +1853,10 @@ class Session {
   save() {
     try {
       const data = {
-        version: 1,
+        version: 2,
         world: this.world.config,
         player: this.player.toJSON(),
         deltas: this.deltas,
-        lastMoveDir: this.lastMoveDir,
       };
       localStorage.setItem("pydventure.save", JSON.stringify(data));
     } catch (e) {
@@ -1999,22 +1873,38 @@ function pickTerrain(description) {
   const low = (description || "").toLowerCase();
   const rules = [
     ["dead plain", "dead_plain"],
-    ["lake bed", "lakebed"],
-    ["tombs", "lakebed"],
+    ["lake bed",   "lakebed"],
+    ["desert",     "desert"],
     ["stone hall", "stone_hall"],
-    ["black stone", "shrine"],
-    ["forest", "forest"],
-    ["valley", "valley"],
-    ["boulders", "valley"],
-    ["plain", "plains"],
-    ["cave", "cave"],
-    ["crypt", "crypt"],
-    ["armory", "armory"],
-    ["library", "library"],
-    ["sanctum", "sanctum"],
+    ["black stone","shrine"],
+    ["forest",     "forest"],
+    ["valley",     "valley"],
+    ["plain",      "plains"],
+    ["cave",       "cave"],
+    ["crypt",      "crypt"],
+    ["armory",     "armory"],
+    ["library",    "library"],
+    ["sanctum",    "sanctum"],
   ];
   for (const [kw, t] of rules) if (low.includes(kw)) return t;
   return "cave";
+}
+
+function groupEnemies(enemies) {
+  const order = [];
+  const groups = new Map();
+  for (const e of enemies) {
+    let g = groups.get(e.name);
+    if (!g) {
+      g = { name: e.name, count: 0, hp: 0, maxHp: 0 };
+      groups.set(e.name, g);
+      order.push(g);
+    }
+    g.count += 1;
+    g.hp += Math.max(0, e.hp);
+    g.maxHp += enemyMaxHp(e.name);
+  }
+  return order;
 }
 
 function stateFromSession(session) {
@@ -2025,8 +1915,8 @@ function stateFromSession(session) {
   if (rs) {
     const doors = {};
     for (const dir of ["N", "E", "S", "W", "U", "D"]) {
-      const di = rs.currentDoors()[dir];
-      if (!di || !rs.isDoorVisible(dir)) { doors[dir] = { present: false }; continue; }
+      const di = rs.room.doors[dir];
+      if (!di) { doors[dir] = { present: false }; continue; }
       doors[dir] = {
         present: true,
         locked: di.pass.length > 0,
@@ -2036,19 +1926,13 @@ function stateFromSession(session) {
     }
     const enemies = rs.currentEnemies();
     const enemyPower = rs.enemyPower(enemies);
-    const items = rs.currentItems().map(it => ({
-      name: it.name, count: it.count, price: it.price,
-      requirements: it.requirements.map(r => r.name),
-    }));
+    const items = rs.currentItems().map(it => ({ name: it.name, count: it.count }));
     const hasFire = p.hasItem(session.combat.fire_item);
     room = {
       description: rs.room.description || "",
-      zone: { index: rs.currentZone, total: rs.room.zones.length },
       terrain: pickTerrain(rs.room.description),
       doors,
-      enemies: enemies.map(([name, count]) => ({
-        name, count, difficulty: ENEMIES[name]?.difficulty ?? 1,
-      })),
+      enemies: groupEnemies(enemies),
       enemyPower,
       items,
       canFight: enemies.length > 0,
@@ -2060,15 +1944,14 @@ function stateFromSession(session) {
   const goalCount = goal?.count || 0;
   const goalHave = p.inventory[goalItem] || 0;
   return {
-    gameName: session.world.config.name || "mygame",
     player: {
       map: p.map, x: p.x, y: p.y, z: p.z,
-      coins: p.coins, swordLevel: p.swordLevel,
+      swordLevel: p.swordLevel,
       hp: p.hp, maxHp: p.maxHp,
       skills: p.skills, inventory: p.inventory,
     },
     goal: {
-      name: goal?.name || "", item: goalItem,
+      item: goalItem,
       count: goalCount, have: goalHave, won: p.won,
     },
     room,
@@ -2082,7 +1965,6 @@ function stateFromSession(session) {
 const $ = id => document.getElementById(id);
 const els = {
   terrain:       $("terrain"),
-  terrainBg:     $("terrain-bg"),
   sky:           $("sky"),
   descText:      $("desc-text"),
   centerEnemies: $("center-enemies"),
@@ -2090,6 +1972,7 @@ const els = {
   centerActions: $("center-actions"),
   feedback:      $("feedback"),
   status:        $("status"),
+  minimapSvg:    $("minimap-svg"),
   welcome:       $("ov-welcome"),
   map:           $("ov-map"),
   mapSvg:        $("map-svg"),
@@ -2109,6 +1992,7 @@ const els = {
 const TERRAIN_STYLES = {
   forest:     { sky: ["#7a9a78", "#2a4a2a"], ground: "#1e3a1e" },
   plains:     { sky: ["#9fb8cf", "#d8d0b8"], ground: "#b8a878" },
+  desert:     { sky: ["#c8d4e0", "#e8d0a0"], ground: "#c8a870" },
   dead_plain: { sky: ["#a8a8a0", "#c8c0b0"], ground: "#6a6050" },
   lakebed:    { sky: ["#5a6a80", "#303a48"], ground: "#2a2820" },
   valley:     { sky: ["#8fb0d0", "#d8e0e8"], ground: "#706050" },
@@ -2150,7 +2034,6 @@ function renderStatus(state) {
   const p = state.player;
   const g = state.goal;
   const parts = [`<span>${p.map}:${p.x},${p.y},${p.z}</span>`];
-  if (p.coins) parts.push(`<span class="sep">|</span><span>coins ${p.coins}</span>`);
   parts.push(`<span class="sep">|</span><span>sword ${p.swordLevel}</span>`);
   if (g.count) parts.push(`<span class="sep">|</span><span class="goal">${g.item} ${g.have}/${g.count}</span>`);
   const hpClass = p.hp <= Math.ceil(p.maxHp / 2) ? "hp low" : "hp";
@@ -2165,7 +2048,7 @@ function renderStatus(state) {
     invStr = "(empty)";
   } else {
     invStr = keys.map(k => {
-      const label = `${k}:${inv[k]}`;
+      const label = `${k}:${inv[k]}/${MAX_ITEM_COUNT}`;
       return isUsableItem(k)
         ? `<span class="inv-slot" data-use="${k}" title="Double-click or long-press to use">${label}</span>`
         : `<span class="inv-slot">${label}</span>`;
@@ -2186,8 +2069,10 @@ function renderCenter(room) {
   els.descText.textContent = room.description || "(no description)";
 
   if (room.enemies && room.enemies.length) {
-    const chips = room.enemies.map(e =>
-      `<span class="chip enemy">${e.name} ×${e.count} <small>d${e.difficulty}</small></span>`);
+    const chips = room.enemies.map(e => {
+      const hpText = e.hp === e.maxHp ? `${e.hp} HP` : `${e.hp}/${e.maxHp} HP`;
+      return `<span class="chip enemy">${e.name} ×${e.count} <small>${hpText}</small></span>`;
+    });
     chips.push(`<span class="chip ep">EP ${room.enemyPower}</span>`);
     els.centerEnemies.innerHTML = chips.join("");
   } else {
@@ -2195,14 +2080,10 @@ function renderCenter(room) {
   }
 
   if (room.items && room.items.length) {
-    els.centerItems.innerHTML = room.items.map(it => {
-      const price = it.price != null ? ` <small>${it.price}c</small>` : "";
-      const req = it.requirements.length ? ` <small>[${it.requirements.join(", ")}]</small>` : "";
-      const verb = it.price != null ? "buy" : "take";
-      const label = it.price != null ? "Buy" : "Take";
-      return `<span class="chip item">${it.name} ×${it.count}${price}${req}` +
-             `<button type="button" data-cmd="${verb} ${it.name}">${label}</button></span>`;
-    }).join("");
+    els.centerItems.innerHTML = room.items.map(it =>
+      `<span class="chip item">${it.name} ×${it.count}` +
+      `<button type="button" data-cmd="take ${it.name}">Take</button></span>`
+    ).join("");
   } else {
     els.centerItems.innerHTML = "";
   }
@@ -2239,6 +2120,7 @@ function render(state) {
   renderCenter(state.room);
   renderDoors(state.room?.doors || {});
   renderTerrain(state.room?.terrain || "cave");
+  if (currentSession) renderMapInto(els.minimapSvg, null, currentSession);
 }
 
 // --------------------------------------------------------------- feedback
@@ -2252,10 +2134,10 @@ function classify(line) {
   if (line.includes("VICTORY")) return "title";
   if (low.includes("victory") || low.includes("defeat the") || low.includes("you take")
       || low.includes("you combine") || low.includes("you rest") || low.includes("you collect")
-      || low.includes("you buy") || low.includes("you hurl")) return "good";
+      || low.includes("you hurl")) return "good";
   if (low.includes("driven back") || low.includes("fail") || low.includes("need ")
       || low.includes("collapse") || low.includes("cannot") || low.includes("unknown")
-      || low.includes("don't")) return "bad";
+      || low.includes("don't") || low.includes("can't carry")) return "bad";
   return null;
 }
 
@@ -2317,53 +2199,82 @@ function clearSlots() { combineSlots.a = null; combineSlots.b = null; renderComb
 
 // --------------------------------------------------------------- map
 
-function renderMap(session) {
+// Geometry is static per (world, map, z) so we cache the rendered markup.
+const mapGeomCache = new Map();
+
+function renderMapInto(svgEl, statusEl, session) {
   const p = session.player;
   const dims = session.world.dimensions(p.map);
-  if (!dims.x) { els.mapSvg.innerHTML = ""; return; }
+  if (!dims.x) {
+    svgEl.innerHTML = "";
+    if (statusEl) statusEl.innerHTML = "";
+    return;
+  }
+
   const cell = 60, gap = 8, pad = 20;
   const totalW = pad * 2 + dims.x * cell + (dims.x - 1) * gap;
   const totalH = pad * 2 + dims.y * cell + (dims.y - 1) * gap;
-  els.mapSvg.setAttribute("viewBox", `0 0 ${totalW} ${totalH}`);
-  const parts = [];
-  parts.push(`<g fill="#0e1218" stroke="#7fb8e8" stroke-width="3">`);
-  for (let y = 0; y < dims.y; y++)
-    for (let x = 0; x < dims.x; x++) {
-      const cx = pad + x * (cell + gap);
-      const cy = pad + (dims.y - 1 - y) * (cell + gap);
-      parts.push(`<rect x="${cx}" y="${cy}" width="${cell}" height="${cell}"/>`);
-    }
-  parts.push(`</g>`);
-  parts.push(`<g stroke="#7fb8e8" stroke-width="27">`);
-  for (let y = 0; y < dims.y; y++)
-    for (let x = 0; x < dims.x; x++) {
-      const room = session.world.getRoom(p.map, x, y, p.z);
-      if (!room) continue;
-      const doors = room.zones[0].doors;
-      const cx = pad + x * (cell + gap);
-      const cy = pad + (dims.y - 1 - y) * (cell + gap);
-      const cxE = cx + cell;
-      const cyN = cy;
-      const centerX = cx + cell / 2;
-      const centerY = cy + cell / 2;
-      if (doors.E) parts.push(`<line x1="${cxE}" y1="${centerY}" x2="${cxE + gap}" y2="${centerY}"/>`);
-      if (doors.N) parts.push(`<line x1="${centerX}" y1="${cyN}" x2="${centerX}" y2="${cyN - gap}"/>`);
-    }
-  parts.push(`</g>`);
+  svgEl.setAttribute("viewBox", `0 0 ${totalW} ${totalH}`);
+
+  const cacheKey = `${session.world.seed}|${p.map}|${p.z}`;
+  let geom = mapGeomCache.get(cacheKey);
+  if (geom === undefined) {
+    const parts = [];
+    parts.push(`<g fill="#2f68a8" stroke="#2f68a8" stroke-width="1">`);
+    for (let y = 0; y < dims.y; y++)
+      for (let x = 0; x < dims.x; x++) {
+        const cx = pad + x * (cell + gap);
+        const cy = pad + (dims.y - 1 - y) * (cell + gap);
+        parts.push(`<rect x="${cx}" y="${cy}" width="${cell}" height="${cell}"/>`);
+      }
+    parts.push(`</g>`);
+    parts.push(`<g stroke="#2f68a8" stroke-width="61">`);
+    for (let y = 0; y < dims.y; y++)
+      for (let x = 0; x < dims.x; x++) {
+        const room = session.world.getRoom(p.map, x, y, p.z);
+        if (!room) continue;
+        const doors = room.doors;
+        const cx = pad + x * (cell + gap);
+        const cy = pad + (dims.y - 1 - y) * (cell + gap);
+        const cxE = cx + cell;
+        const cyN = cy;
+        const centerX = cx + cell / 2;
+        const centerY = cy + cell / 2;
+        if (doors.E) parts.push(`<line x1="${cxE}" y1="${centerY}" x2="${cxE + gap}" y2="${centerY}"/>`);
+        if (doors.N) parts.push(`<line x1="${centerX}" y1="${cyN}" x2="${centerX}" y2="${cyN - gap}"/>`);
+      }
+    parts.push(`</g>`);
+    geom = parts.join("");
+    mapGeomCache.set(cacheKey, geom);
+  }
+
   const px = pad + p.x * (cell + gap) + cell / 2;
   const py = pad + (dims.y - 1 - p.y) * (cell + gap) + cell / 2;
-  parts.push(`
+  // Marker radius scales with the viewBox so it stays legible in both the
+  // full-size overlay map and the small docked mini map.
+  const unit   = Math.max(totalW, totalH);
+  const rDot   = unit * 0.011;
+  const rPulse = unit * 0.020;
+
+  svgEl.innerHTML = geom + `
     <g>
-      <circle cx="${px}" cy="${py}" r="14" fill="var(--accent)" opacity="0.25">
-        <animate attributeName="r" values="14;22;14" dur="1.6s" repeatCount="indefinite"/>
+      <circle cx="${px}" cy="${py}" r="${rPulse}" fill="var(--accent)" opacity="0.25">
+        <animate attributeName="r" values="${rPulse};${(rPulse * 1.55).toFixed(2)};${rPulse}" dur="1.6s" repeatCount="indefinite"/>
       </circle>
-      <circle cx="${px}" cy="${py}" r="8" fill="var(--accent)">
+      <circle cx="${px}" cy="${py}" r="${rDot}" fill="var(--accent)">
         <animate attributeName="opacity" values="1;0.15;1" dur="1.6s" repeatCount="indefinite"/>
       </circle>
-    </g>`);
-  els.mapSvg.innerHTML = parts.join("");
-  els.mapStatus.innerHTML = `<span>${p.map}, z = ${p.z}</span>` +
-    `<span class="sep">|</span><span class="goal">you are at ${p.x},${p.y}</span>`;
+    </g>`;
+
+  if (statusEl) {
+    statusEl.innerHTML = `<span>${p.map}, z = ${p.z}</span>` +
+      `<span class="sep">|</span><span class="goal">you are at ${p.x},${p.y}</span>`;
+  }
+}
+
+function renderMap(session) {
+  renderMapInto(els.mapSvg, els.mapStatus, session);
+  renderMapInto(els.minimapSvg, null, session);
 }
 
 // ============================================================================
@@ -2426,13 +2337,12 @@ function buildFullConfig({ name, width, height, seed }) {
       victory_message:
         "You place the seven crystals on the altar. The shrine fills with light, and the world is quiet again.",
     },
-    respawn: { minutes: 5, chance: 0.2, no_respawn: ["dragon", "dragon_red"] },
     combat: {
       damage_per_fail: 1,
       heart_item: "heart",
       shelter_item: "shelter",
       fire_item: "fire",
-      death: { coin_loss_fraction: 0.5, restore_hp: true },
+      death: { restore_hp: true },
     },
     maps,
   };
@@ -2446,31 +2356,33 @@ function startGame(worldCfg) {
   const t1 = performance.now();
   console.log(`World generated in ${(t1 - t0).toFixed(0)} ms`);
 
-  let player = null, deltas = {}, lastMoveDir = null;
+  mapGeomCache.clear();
+
+  let player = null, deltas = {};
   try {
     const raw = localStorage.getItem("pydventure.save");
     if (raw) {
       const saved = JSON.parse(raw);
-      const same = saved.world && saved.world.seed === config.seed
+      const same = saved.version === 2
+                && saved.world && saved.world.seed === config.seed
                 && saved.world.width === config.width
                 && saved.world.height === config.height
                 && saved.world.name === config.name;
       if (same) {
         player = Player.fromJSON(saved.player);
         deltas = saved.deltas || {};
-        lastMoveDir = saved.lastMoveDir || null;
       }
     }
   } catch (e) { console.warn("Save load failed:", e); }
 
   if (!player) player = new Player({ map: "overworld", x: 0, y: 0, z: 1 });
 
-  currentSession = new Session(world, player, { deltas, lastMoveDir });
+  currentSession = new Session(world, player, { deltas });
 
   clearFeedback();
   appendFeedback(`Welcome to ${config.name}.`, "title");
   if (player.won) appendFeedback("The world is quiet. You have already won.");
-  else appendFeedback("Click a door, or use the items around you.");
+  else appendFeedback(`Carry at most ${MAX_ITEM_COUNT} of each item. Craft early.`);
 
   render(stateFromSession(currentSession));
   currentSession.save();
@@ -2543,15 +2455,10 @@ $("w-play").addEventListener("click", () => {
 
 // --------------------------------------------------------------- input
 
-const history = [];
-let histIdx = 0;
-
 function submit(text) {
   if (!currentSession) return;
   const cmd = text.trim();
   if (!cmd) return;
-  history.push(cmd);
-  histIdx = history.length;
   let result;
   try {
     result = currentSession.handleCommand(cmd);
@@ -2561,20 +2468,15 @@ function submit(text) {
     return;
   }
   for (const line of result.lines) appendFeedback(line, classify(line));
-  if (result.endedReason === "victory" || result.endedReason === "quit") {
-    showEnded(result.endedReason);
-  }
+  if (result.endedReason === "victory") showEnded("victory");
   render(stateFromSession(currentSession));
   currentSession.save();
   return result;
 }
 
 function showEnded(reason) {
-  const titles = { victory: "Victory", quit: "Saved" };
-  const bodies = {
-    victory: "The seven crystals are placed. The world is quiet.",
-    quit: "Close the tab whenever you're ready.",
-  };
+  const titles = { victory: "Victory" };
+  const bodies = { victory: "The seven crystals are placed. The world is quiet." };
   els.endedTitle.textContent = titles[reason] ?? "Ended";
   els.endedBody.textContent  = bodies[reason]  ?? "";
   els.ended.hidden = false;
@@ -2686,7 +2588,7 @@ els.combineGo.addEventListener("click", () => {
   const cmd = `combine ${combineSlots.a} ${combineSlots.b}`;
   clearSlots();
   const result = submit(cmd);
-  renderCombineInv();                       // refresh list with new inventory
+  renderCombineInv();
   const line = result && result.lines.length
     ? result.lines[result.lines.length - 1] : "";
   els.combineFeedback.textContent = line;
@@ -2700,7 +2602,7 @@ $("dev-wipe").addEventListener("click", () => {
   localStorage.removeItem(STORAGE_KEY);
   location.reload();
 });
-$("dev-ended").addEventListener("click", () => { els.ended.hidden = false; });
+$("dev-ended").addEventListener("click", () => { els.ended.hidden = true; });
 
 console.log("pydventure loaded.");
 </script>
